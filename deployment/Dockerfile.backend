@@ -10,15 +10,11 @@ RUN npm run build
 FROM node:20-alpine
 WORKDIR /app
 
-RUN addgroup --system --gid 1001 nodejs
-RUN adduser --system --uid 1001 nodeapi
-USER nodeapi
+COPY --from=builder /app/dist ./dist
+COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/package.json ./
 
-COPY --from=builder --chown=nodeapi:nodejs /app/dist ./dist
-COPY --from=builder --chown=nodeapi:nodejs /app/node_modules ./node_modules
-COPY --from=builder --chown=nodeapi:nodejs /app/package.json ./
-
-RUN mkdir -p /app/storage && chown nodeapi:nodejs /app/storage
+RUN mkdir -p /app/storage
 
 EXPOSE 4000
 ENV PORT=4000
