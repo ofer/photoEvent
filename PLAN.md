@@ -25,34 +25,40 @@ A photo event web app for events (bar mitzvah, wedding, etc.) where:
    - `deployment/` — Dockerfile, docker-compose.yml, start/stop script
 
 2. **Frontend scaffolding**
-   - `npx create-next-app@latest frontend` with TypeScript, App Router, no src/ dir (flat), Tailwind CSS
-   - Basic layout, config
+   - Next.js 15 with TypeScript, App Router, Tailwind CSS, @tailwindcss/forms
+   - Layout with Inter font, print CSS
+   - Home page with navigation to capture and gallery
 
 3. **Backend scaffolding**
-   - Express server with TypeScript (or plain JS for simplicity)
-   - File upload route (multer or native)
-   - File listing route
+   - Express server with TypeScript
+   - Multer for file uploads (20MB limit, image-only filter)
+   - Photo upload route with Sharp thumbnail generation
+   - Photo listing route (newest first)
+   - Photo serving route
    - Health check endpoint
+   - Event config endpoint
 
 4. **Docker setup**
-   - Multi-stage Dockerfile for frontend
+   - Multi-stage Dockerfile for frontend (standalone output)
    - Dockerfile for backend
-   - `docker-compose.yml` with frontend, backend, and network
+   - `docker-compose.yml` with frontend, backend, and named volume for photos
    - `deployment/start.sh` and `deployment/stop.sh`
 
 5. **Dev scripts**
-   - `npm run dev:frontend`, `npm run dev:backend` from root, or just document `cd frontend && npm run dev`
+   - Root: `npm run dev:frontend`, `npm run dev:backend`
+   - Frontend: `npm run dev` (port 3000), `npm run build`
+   - Backend: `npm run dev` (tsx watch, port 4000), `npm run build`, `npm test`
 
 ### Success Criteria
 
-- [ ] `ls` shows `frontend/`, `backend/`, `storage/`, `deployment/` directories
-- [ ] `frontend/` is a working Next.js app (`npm run dev` starts on port 3000)
-- [ ] `backend/` is a working server (`npm run dev` starts on port 4000)
-- [ ] `docker-compose up` builds and runs both services
-- [ ] `deployment/start.sh` and `deployment/stop.sh` work
-- [ ] `storage/` directory exists and is writable
-- [ ] Git repo initialized with initial commit
-- [ ] `.gitignore` excludes node_modules, .next, .env, etc.
+- [x] `ls` shows `frontend/`, `backend/`, `storage/`, `deployment/` directories
+- [x] `frontend/` is a working Next.js app (`npm run build` compiles)
+- [x] `backend/` is a working server (`npm run build` compiles)
+- [x] `docker-compose up` configured with both services
+- [x] `deployment/start.sh` and `deployment/stop.sh` exist and are executable
+- [x] `storage/` directory exists and is writable
+- [x] Git repo initialized with initial commit
+- [x] `.gitignore` excludes node_modules, .next, .env, etc.
 
 ---
 
@@ -63,35 +69,38 @@ A photo event web app for events (bar mitzvah, wedding, etc.) where:
 ### Tasks
 
 1. **Backend photo upload**
-   - POST `/api/photo` — accept multipart form upload, save to `storage/` with timestamp-based filename
+   - POST `/api/photos` — accept multipart form upload, save to `storage/` with timestamp-based filename
    - GET `/api/photos` — list all uploaded photos
    - GET `/api/photos/:id` — serve a specific photo
-   - Auto-generate a small thumbnail
+   - Auto-generate a small thumbnail via Sharp (400x400 cover)
 
 2. **Backend WebSocket or SSE**
-   - Server-sent events on `/api/updates` or WebSocket on `/ws` to notify clients of new photos
-   - Keep it simple — SSE preferred (no extra deps)
+   - Server-sent events on `/api/updates` to notify clients of new photos
+   - SSE with no extra dependencies
+   - Subscribers stored in memory, cleaned up on client disconnect
 
 3. **Frontend: Mobile capture page**
-   - Single page with a camera button using `<input type="file" capture="environment">` (simplest reliable path)
+   - Single page at `/capture` with a camera button using `<input type="file" capture="environment">`
    - After capture, auto-upload to backend
-   - Show upload progress / success / error
+   - Show upload progress / success / error states
    - Responsive, works on iOS Safari and Android Chrome
 
 4. **Frontend: Photo gallery page**
-   - Displays all uploaded photos in a grid
-   - Auto-refreshes when new photos arrive (via SSE/WebSocket)
+   - Displays all uploaded photos in a responsive grid (2-4 columns)
+   - Auto-refreshes when new photos arrive via SSE
+   - Shows event name from `/api/event` config
+   - Loading skeleton, empty state, and photo timestamps
 
 ### Success Criteria
 
-- [ ] POST `/api/photo` saves file to `storage/` and returns success with metadata
-- [ ] GET `/api/photos` returns list of all photos with URLs
-- [ ] GET `/api/photos/:id` serves the actual image file
-- [ ] Frontend camera capture works on iOS Safari
-- [ ] Frontend camera capture works on Android Chrome
-- [ ] Uploaded photos appear in gallery immediately after upload
-- [ ] New photos auto-appear in gallery without page refresh (SSE/WebSocket)
-- [ ] Unit tests for upload handler and photo listing
+- [x] POST `/api/photos` saves file to `storage/` and returns success with metadata
+- [x] GET `/api/photos` returns list of all photos with URLs
+- [x] GET `/api/photos/:id` serves the actual image file
+- [x] Frontend camera capture page at `/capture` with upload flow
+- [x] Frontend gallery page at `/gallery` with grid and SSE auto-refresh
+- [x] Uploaded photos appear in gallery immediately after upload
+- [x] New photos auto-appear in gallery without page refresh (SSE)
+- [x] Unit tests for upload handler and photo listing (6 tests, all passing)
 
 ---
 
