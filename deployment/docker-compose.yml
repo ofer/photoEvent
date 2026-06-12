@@ -1,0 +1,29 @@
+services:
+  frontend:
+    build:
+      context: ..
+      dockerfile: deployment/Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      - BACKEND_URL=http://backend:4000
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+  backend:
+    build:
+      context: ..
+      dockerfile: deployment/Dockerfile.backend
+    ports:
+      - "4000:4000"
+    volumes:
+      - photo-storage:/app/storage
+    environment:
+      - PORT=4000
+      - EVENT_NAME=${EVENT_NAME:-PhotoEvent}
+      - EVENT_YEAR=${EVENT_YEAR:-2026}
+    restart: unless-stopped
+
+volumes:
+  photo-storage:

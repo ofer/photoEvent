@@ -1,0 +1,43 @@
+import express, { Request, Response, NextFunction } from "express";
+import multer from "multer";
+import { photoRouter } from "./routes/photos";
+import { eventRouter } from "./routes/events";
+import { sseRouter } from "./routes/sse";
+
+const app = express();
+const PORT = process.env.PORT || 4000;
+
+// Middleware
+app.use(express.json({ limit: "50mb" }));
+app.use(express.urlencoded({ extended: true, limit: "50mb" }));
+
+// Routes
+app.use("/api/photos", photoRouter);
+app.use("/api/event", eventRouter);
+app.use("/api/updates", sseRouter);
+
+// Health check
+app.get("/api/health", (_req: Request, res: Response) => {
+  res.json({ status: "ok", timestamp: new Date().toISOString() });
+});
+
+// Error handling middleware
+app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
+  if (err instanceof multer.MulterError) {
+    console.error("Multer error:", err);
+    res.status(400).json({ error: err.message });
+  } else if (err.message === "Only image files are allowed") {
+    res.status(400).json({ error: err.message });
+  } else {
+    console.error("Unhandled error:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+if (process.env.NODE_ENV !== "test") {
+  app.listen(PORT, () => {
+    console.log(`Server running on port ${PORT}`);
+  });
+}
+
+export default app;
