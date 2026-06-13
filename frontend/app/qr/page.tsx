@@ -15,13 +15,14 @@ export default function QRPage() {
 
   const fetchData = useCallback(async () => {
     try {
+      setError("");
       const [evRes, qrRes] = await Promise.all([
         fetch(`${API_BASE}/api/event`),
         fetch(`${API_BASE}/api/qr`),
       ]);
       if (evRes.ok) {
         const ev = await evRes.json();
-        setEvent(ev);
+        setEvent(ev ?? {});
       }
       if (qrRes.ok) {
         const blobUrl = URL.createObjectURL(await qrRes.blob());
@@ -36,15 +37,21 @@ export default function QRPage() {
 
   useEffect(() => {
     fetchData();
-  }, [fetchData]);
+    // Auto-refresh every 30 seconds in case of network blips
+    const interval = setInterval(fetchData, 30_000);
+    return () => {
+      clearInterval(interval);
+      if (qrUrl) URL.revokeObjectURL(qrUrl);
+    };
+  }, [fetchData, qrUrl]);
 
   return (
     <main className="min-h-screen flex flex-col items-center justify-center bg-white p-8">
-      <div className="text-center">
-        <h1 className="text-3xl font-bold mb-2">
-          {event.name} {event.year}
+      <div className="text-center max-w-md">
+        <h1 className="text-3xl font-bold mb-1">
+          {event.name || "PhotoEvent"} {event.year}
         </h1>
-        <p className="text-gray-500 mb-8 text-lg">
+        <p className="text-gray-500 mb-10 text-base">
           Scan to take a photo
         </p>
 
@@ -53,21 +60,27 @@ export default function QRPage() {
             <img
               src={qrUrl}
               alt="Scan to capture photos"
-              className="w-80 h-80 sm:w-96 sm:h-96"
+              className="w-72 h-72 sm:w-80 sm:h-80 rounded-lg shadow-lg"
             />
           ) : (
-            <div className="w-80 h-80 sm:w-96 sm:h-96 bg-gray-200 rounded-lg animate-pulse flex items-center justify-center">
+            <div className="w-72 h-72 sm:w-80 sm:h-80 bg-gray-100 rounded-lg flex items-center justify-center">
               <svg
-                className="w-12 h-12 text-gray-400"
+                className="w-10 h-10 text-gray-300 animate-spin"
                 fill="none"
-                stroke="currentColor"
                 viewBox="0 0 24 24"
               >
+                <circle
+                  className="opacity-25"
+                  cx="12"
+                  cy="12"
+                  r="10"
+                  stroke="currentColor"
+                  strokeWidth="3"
+                />
                 <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={1.5}
-                  d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h2m-2 0h-2M20 8v8a2 2 0 01-2 2H6a2 2 0 01-2-2V8a2 2 0 012-2h8"
+                  className="opacity-75"
+                  fill="currentColor"
+                  d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
                 />
               </svg>
             </div>
@@ -75,10 +88,15 @@ export default function QRPage() {
         </div>
 
         {error && (
-          <p className="text-red-500 text-sm">{error}</p>
+          <div className="inline-flex items-center gap-2 text-red-500 text-sm bg-red-50 px-4 py-2 rounded-lg">
+            <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            {error}
+          </div>
         )}
 
-        <p className="text-gray-400 text-sm mt-6">
+        <p className="text-gray-400 text-xs mt-6">
           Point your phone camera at the QR code
         </p>
       </div>

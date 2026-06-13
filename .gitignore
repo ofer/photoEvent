@@ -32,3 +32,5 @@ storage/*
 
 # Docker (local)
 deployment/.env
+
+.omo/

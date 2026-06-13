@@ -3,15 +3,20 @@ services:
     build:
       context: ..
       dockerfile: deployment/Dockerfile
-      args:
-        NEXT_PUBLIC_API_URL: http://backend:4000
     ports:
       - "3300:3000"
     environment:
       - BACKEND_URL=http://backend:4000
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:3000"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
 
   backend:
     build:
@@ -27,6 +32,12 @@ services:
       - EVENT_YEAR=${EVENT_YEAR:-2026}
       - CAPTURE_URL=${CAPTURE_URL:-http://localhost:3300/capture}
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:4000/api/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
 
 volumes:
   photo-storage:

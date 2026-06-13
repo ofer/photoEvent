@@ -1,0 +1,15 @@
+node_modules
+.next
+.env
+.env.local
+*.log
+out
+dist
+.cache
+.git
+.vscode
+*.md
+coverage
+.DS_Store
+*.swp
+*.swo

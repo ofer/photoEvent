@@ -15,15 +15,32 @@ if [ ! -f deployment/.env ]; then
   echo "EVENT_NAME=${EVENT_NAME:-PhotoEvent}" > deployment/.env
   echo "EVENT_YEAR=${EVENT_YEAR:-2026}" >> deployment/.env
   echo "CAPTURE_URL=${CAPTURE_URL}" >> deployment/.env
-  echo "Detected host IP: ${HOST_IP} (QR points to ${CAPTURE_URL})"
-  echo "  Override: edit deployment/.env or export CAPTURE_URL before running"
-  echo ""
 fi
 
 echo "Starting PhotoEvent..."
 docker compose -f deployment/docker-compose.yml up -d
+
 echo ""
-echo "Services running:"
-echo "  Frontend: http://localhost:${FRONTEND_PORT}"
-echo "  Backend:  http://localhost:4400"
-echo "  QR code:  ${CAPTURE_URL}/capture  (for phones on your network)"
+echo "Waiting for services to be healthy..."
+sleep 5
+
+echo ""
+echo "Services status:"
+docker compose -f deployment/docker-compose.yml ps
+
+echo ""
+echo "========================================"
+echo "  PhotoEvent is running!"
+echo "========================================"
+echo ""
+echo "  Frontend:  http://localhost:${FRONTEND_PORT}"
+echo "  Gallery:   http://localhost:${FRONTEND_PORT}/gallery"
+echo "  Capture:   ${CAPTURE_URL}"
+echo "  QR Code:   http://localhost:${FRONTEND_PORT}/qr"
+echo "  Kiosk:     http://localhost:${FRONTEND_PORT}/kiosk"
+echo "  Backend:   http://localhost:4400"
+echo ""
+echo "  Share this URL with phones on your network:"
+echo "  ${CAPTURE_URL}"
+echo ""
+echo "  Stop with: cd deployment && ./stop.sh"

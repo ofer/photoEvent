@@ -28,14 +28,22 @@ app.get("/api/health", (_req: Request, res: Response) => {
 // Error handling middleware
 app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
   if (err instanceof multer.MulterError) {
-    console.error("Multer error:", err);
-    res.status(400).json({ error: err.message });
-  } else if (err.message === "Only image files are allowed") {
-    res.status(400).json({ error: err.message });
-  } else {
-    console.error("Unhandled error:", err);
-    res.status(500).json({ error: "Internal server error" });
+    console.error("Multer error:", err.code, err.message);
+    if (err.code === "LIMIT_FILE_SIZE") {
+      return res.status(413).json({ error: "File too large. Maximum size is 20MB." });
+    }
+    return res.status(400).json({ error: err.message });
   }
+  if (err.message === "Only image files are allowed") {
+    return res.status(400).json({ error: "Only image files are allowed" });
+  }
+  // ENOSPC = disk full / no space left on device
+  if ((err as NodeJS.ErrnoException).code === "ENOSPC") {
+    console.error("Disk full — cannot write files");
+    return res.status(507).json({ error: "Storage is full. Contact the administrator." });
+  }
+  console.error("Unhandled error:", err);
+  res.status(500).json({ error: "Internal server error" });
 });
 
 if (process.env.NODE_ENV !== "test") {
