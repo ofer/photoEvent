@@ -9,5 +9,9 @@
     "build:backend": "cd backend && npm run build",
     "start:frontend": "cd frontend && npm start",
     "start:backend": "cd backend && npm start"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.60.0",
+    "playwright": "^1.60.0"
   }
 }

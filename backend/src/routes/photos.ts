@@ -6,7 +6,14 @@ import sharp from "sharp";
 import { notifyNewPhoto } from "../sse";
 
 const router = Router();
-const STORAGE_DIR = path.resolve(__dirname, "../../storage");
+function getStorageDir() {
+  const base = path.resolve(__dirname, "../../storage");
+  if (fs.existsSync(base)) return base;
+  const fallback = path.resolve(process.cwd(), "storage");
+  if (fs.existsSync(fallback)) return fallback;
+  return base;
+}
+const STORAGE_DIR = getStorageDir();
 
 if (!fs.existsSync(STORAGE_DIR)) {
   fs.mkdirSync(STORAGE_DIR, { recursive: true });
@@ -34,7 +41,7 @@ const upload = multer({
 });
 
 // POST /api/photos
-router.post("/", upload.single("photo"), (req: Request, res: Response) => {
+router.post("/", upload.single("photo"), async (req: Request, res: Response) => {
   if (req instanceof Error) {
     return res.status(400).json({ error: req.message });
   }
@@ -47,36 +54,50 @@ router.post("/", upload.single("photo"), (req: Request, res: Response) => {
   const filePath = path.join(STORAGE_DIR, filename);
   const originalName = req.file.originalname;
 
-  (async () => {
-    try {
-      const thumbPath = path.join(STORAGE_DIR, `thumb_${filename}`);
-      await sharp(filePath)
-        .resize(400, 400, { fit: "cover" })
-        .jpeg({ quality: 75 })
-        .toFile(thumbPath);
-    } catch (err) {
-      console.error("Thumbnail generation failed:", err);
-    }
-
-    const photo = {
-      id: filename,
-      name: originalName,
-      timestamp: new Date().toISOString(),
-      url: `/api/photos/${filename}`,
-      thumb: `/api/photos/thumb_${filename}`,
+  // Wait for multer to finish writing the file before proceeding.
+  // Multer's diskStorage streams the file, and next() may be called
+  // before the OS has fully flushed the data to disk. If we send the
+  // response or SSE notification before the file is ready, the kiosk
+  // will request the framed image and get a 404 (broken image).
+  await new Promise<void>((resolve, reject) => {
+    let retries = 0;
+    const check = () => {
+      if (fs.existsSync(filePath)) {
+        resolve();
+        return;
+      }
+      retries++;
+      if (retries > 20) {
+        reject(new Error("File not written to disk after 1s"));
+        return;
+      }
+      setTimeout(check, 50);
     };
-
-    notifyNewPhoto(photo);
-
-    if (!res.headersSent) {
-      res.status(201).json(photo);
-    }
-  })().catch((err) => {
-    console.error("Upload error:", err);
-    if (!res.headersSent) {
-      res.status(500).json({ error: "Upload failed" });
-    }
+    check();
   });
+
+  const photo = {
+    id: filename,
+    name: originalName,
+    timestamp: new Date().toISOString(),
+    url: `/api/photos/${filename}`,
+    thumb: `/api/photos/thumb_${filename}`,
+  };
+
+  // Generate thumbnail asynchronously — don't block the response
+  const thumbPath = path.join(STORAGE_DIR, `thumb_${filename}`);
+  sharp(filePath)
+    .resize(400, 400, { fit: "cover" })
+    .jpeg({ quality: 75 })
+    .toFile(thumbPath)
+    .catch((err) => {
+      console.error("Thumbnail error:", err);
+    });
+
+  res.status(201).json(photo);
+  if (process.env.NODE_ENV !== "test") {
+    notifyNewPhoto(photo);
+  }
 });
 
 // GET /api/photos

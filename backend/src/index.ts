@@ -3,6 +3,8 @@ import multer from "multer";
 import { photoRouter } from "./routes/photos";
 import { eventRouter } from "./routes/events";
 import { sseRouter } from "./routes/sse";
+import { frameRouter } from "./routes/frame";
+import { qrRouter } from "./routes/qr";
 
 const app = express();
 const PORT = process.env.PORT || 4000;
@@ -15,6 +17,8 @@ app.use(express.urlencoded({ extended: true, limit: "50mb" }));
 app.use("/api/photos", photoRouter);
 app.use("/api/event", eventRouter);
 app.use("/api/updates", sseRouter);
+app.use("/api/frame", frameRouter);
+app.use("/api/qr", qrRouter);
 
 // Health check
 app.get("/api/health", (_req: Request, res: Response) => {

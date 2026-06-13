@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 
-const BACKEND_URL = process.env.BACKEND_URL || "http://backend:4000";
+const BACKEND_URL =
+  process.env.BACKEND_URL ||
+  (process.env.NODE_ENV === "production"
+    ? "http://backend:4000"
+    : "http://127.0.0.1:4000");
 
 export function middleware(request: NextRequest) {
   const url = request.nextUrl;
@@ -9,7 +13,6 @@ export function middleware(request: NextRequest) {
   if (url.pathname.startsWith("/api/")) {
     const backendUrl = `${BACKEND_URL}${url.pathname}${url.search}`;
 
-    // Forward the request to the backend
     return fetch(backendUrl, {
       method: request.method,
       headers: {
@@ -26,11 +29,11 @@ export function middleware(request: NextRequest) {
       headers.set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
       headers.set("Access-Control-Allow-Headers", "Content-Type, Accept");
 
-      // For SSE streaming, prevent caching
+      // For SSE streaming, preserve streaming headers
       if (url.pathname === "/api/updates") {
+        headers.set("Content-Type", "text/event-stream");
         headers.set("Cache-Control", "no-cache");
         headers.set("Connection", "keep-alive");
-        headers.set("Content-Type", "text/event-stream");
       }
 
       return new Response(response.body, {
