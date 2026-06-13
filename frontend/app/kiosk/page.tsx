@@ -222,7 +222,7 @@ export default function KioskPage() {
             visibility: visible;
           }
           .kiosk-print-area {
-            position: fixed;
+            position: absolute;
             left: 0;
             top: 0;
             width: 100%;
@@ -233,6 +233,8 @@ export default function KioskPage() {
           }
           .kiosk-print-area > div:first-child {
             position: static;
+            width: 100%;
+            height: 100%;
           }
           .kiosk-print-area img {
             max-width: 100% !important;
@@ -240,6 +242,7 @@ export default function KioskPage() {
             width: auto !important;
             height: auto !important;
             object-fit: contain;
+            page-break-inside: avoid;
           }
           .kiosk-print-area > div:last-child {
             display: none !important;

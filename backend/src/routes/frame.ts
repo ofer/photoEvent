@@ -64,8 +64,8 @@ router.get("/:id", async (req: Request, res: Response) => {
     const svgOverlay = Buffer.from(
       `<svg xmlns="http://www.w3.org/2000/svg" width="${frameW}" height="${BOTTOM_BAR_HEIGHT}">
         <rect x="0" y="0" width="${frameW}" height="${BOTTOM_BAR_HEIGHT}" fill="${barColor}"/>
-        <text x="50%" y="36" text-anchor="middle" fill="${barTextColor}" font-family="Helvetica, Arial, sans-serif" font-weight="bold" font-size="${FONT_SIZE}">${eventCfg.name}</text>
-        <text x="50%" y="70" text-anchor="middle" fill="${subtextColor}" font-family="Helvetica, Arial, sans-serif" font-size="${FONT_SIZE - 8}">${eventCfg.year}</text>
+        <text x="50%" y="36" text-anchor="middle" fill="${barTextColor}" font-family="DejaVu Sans, Helvetica, Arial, sans-serif" font-weight="bold" font-size="${FONT_SIZE}">${eventCfg.name}</text>
+        <text x="50%" y="70" text-anchor="middle" fill="${subtextColor}" font-family="DejaVu Sans, Helvetica, Arial, sans-serif" font-size="${FONT_SIZE - 8}">${eventCfg.year}</text>
       </svg>`
     );
 
