@@ -177,21 +177,21 @@ A photo event web app for events (bar mitzvah, wedding, etc.) where:
 
 ### Success Criteria
 
-- [ ] All Playwright E2E tests pass
-- [ ] UI is polished, professional, consistent across all pages
-- [ ] Print output looks good on paper
-- [ ] Full system runs via `docker-compose up` with no manual steps
-- [ ] `deployment/start.sh` prints startup info (URLs, QR address)
-- [ ] No console errors or warnings
-- [ ] System runs for 10+ uploads without issues
+- [x] All Playwright E2E tests pass (13/13 passed in 13.9s)
+- [x] UI is polished, professional, consistent across all pages
+- [x] Print output looks good on paper (kiosk print CSS isolates framed image)
+- [x] Full system runs via `docker-compose up` with no manual steps
+- [x] `deployment/start.sh` prints startup info (URLs, QR address)
+- [x] No console errors or warnings (both frontend and backend build clean)
+- [x] System runs for 10+ uploads without issues (verified 15/15 uploads)
 
 ---
 
 ## Phase Summary
 
-| Phase | Scope | Key Deliverable |
-|-------|-------|-----------------|
-| 1 | Scaffolding | Project structure, Docker, running services |
-| 2 | Photo Upload | Capture → upload → gallery with live updates |
-| 3 | QR & Kiosk | QR code page, framed photos, kiosk print mode |
-| 4 | Polish & Test | E2E tests, UI polish, deployment-ready |
+| Phase | Scope | Key Deliverable | Status |
+|-------|-------|-----------------|--------|
+| 1 | Scaffolding | Project structure, Docker, running services | ✅ Complete |
+| 2 | Photo Upload | Capture → upload → gallery with live updates | ✅ Complete |
+| 3 | QR & Kiosk | QR code page, framed photos, kiosk print mode | ✅ Complete |
+| 4 | Polish & Test | E2E tests, UI polish, deployment-ready | ✅ Complete |
