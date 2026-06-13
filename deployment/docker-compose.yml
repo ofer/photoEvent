@@ -25,6 +25,7 @@ services:
       - PORT=4000
       - EVENT_NAME=${EVENT_NAME:-PhotoEvent}
       - EVENT_YEAR=${EVENT_YEAR:-2026}
+      - CAPTURE_URL=${CAPTURE_URL:-http://localhost:3300/capture}
     restart: unless-stopped
 
 volumes:

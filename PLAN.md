@@ -135,14 +135,14 @@ A photo event web app for events (bar mitzvah, wedding, etc.) where:
 
 ### Success Criteria
 
-- [ ] `/api/event` returns configured event name and details
-- [ ] `/qr` page displays a large, scannable QR code that links to the capture page
-- [ ] `/api/frame/:id` returns a photo with an event frame overlaid
-- [ ] `/kiosk` auto-displays each new incoming photo with a 30-second countdown timer
-- [ ] Photo prints automatically after 30 seconds without user interaction
-- [ ] "Discard" button cancels the pending print and clears the image so the next photo loads on arrival
-- [ ] QR code is scannable from a reasonable distance (>1 meter)
-- [ ] Unit tests for framing logic and event config
+- [x] `/api/event` returns configured event name and details
+- [x] `/qr` page displays a large, scannable QR code that links to the capture page
+- [x] `/api/frame/:id` returns a photo with an event frame overlaid
+- [x] `/kiosk` auto-displays each new incoming photo with a 30-second countdown timer
+- [x] Photo prints automatically after 30 seconds without user interaction
+- [x] "Discard" button cancels the pending print and clears the image so the next photo loads on arrival
+- [x] QR code is scannable from a reasonable distance (>1 meter)
+- [x] Unit tests for framing logic and event config
 
 ---
 
