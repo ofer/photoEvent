@@ -1,12 +1,11 @@
-import { Router } from "express";
+import { Router, Request, Response } from "express";
+import { loadConfig } from "./config";
 
 const router = Router();
 
-router.get("/", (_req, res) => {
-  res.json({
-    name: process.env.EVENT_NAME || "PhotoEvent",
-    year: process.env.EVENT_YEAR || "2026",
-  });
+router.get("/", (_req: Request, res: Response) => {
+  const config = loadConfig();
+  res.json(config.event);
 });
 
 export { router as eventRouter };

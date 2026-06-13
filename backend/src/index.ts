@@ -5,6 +5,7 @@ import { eventRouter } from "./routes/events";
 import { sseRouter } from "./routes/sse";
 import { frameRouter } from "./routes/frame";
 import { qrRouter } from "./routes/qr";
+import { configRouter } from "./routes/config";
 
 const app = express();
 const PORT = process.env.PORT || 4000;
@@ -16,6 +17,7 @@ app.use(express.urlencoded({ extended: true, limit: "50mb" }));
 // Routes
 app.use("/api/photos", photoRouter);
 app.use("/api/event", eventRouter);
+app.use("/api/config", configRouter);
 app.use("/api/updates", sseRouter);
 app.use("/api/frame", frameRouter);
 app.use("/api/qr", qrRouter);

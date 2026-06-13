@@ -104,7 +104,10 @@ router.post("/", upload.single("photo"), async (req: Request, res: Response) => 
 router.get("/", (_req: Request, res: Response) => {
   const files = fs.readdirSync(STORAGE_DIR);
   const photos = files
-    .filter((f) => !f.startsWith("thumb_"))
+    .filter((f) => {
+      const fullPath = path.join(STORAGE_DIR, f);
+      return !f.startsWith("thumb_") && !f.startsWith(".") && !fs.statSync(fullPath).isDirectory();
+    })
     .map((filename) => ({
       id: filename,
       name: filename,

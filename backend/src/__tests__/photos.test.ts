@@ -12,7 +12,10 @@ describe("Photo API", () => {
     // Clean storage before each test
     if (fs.existsSync(STORAGE_DIR)) {
       fs.readdirSync(STORAGE_DIR).forEach((file) => {
-        fs.unlinkSync(path.join(STORAGE_DIR, file));
+        const fullPath = path.join(STORAGE_DIR, file);
+        if (fs.statSync(fullPath).isFile()) {
+          fs.unlinkSync(fullPath);
+        }
       });
     }
   });

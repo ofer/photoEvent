@@ -20,6 +20,12 @@
   }
 }
 
+@media (min-width: 640px) {
+  .pb-sm-6 {
+    padding-bottom: 1.5rem;
+  }
+}
+
 /* Photo entrance animation */
 @keyframes photo-in {
   from {
