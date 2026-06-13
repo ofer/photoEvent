@@ -3,8 +3,10 @@ services:
     build:
       context: ..
       dockerfile: deployment/Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: http://backend:4000
     ports:
-      - "3000:3000"
+      - "3300:3000"
     environment:
       - BACKEND_URL=http://backend:4000
     depends_on:
@@ -16,7 +18,7 @@ services:
       context: ..
       dockerfile: deployment/Dockerfile.backend
     ports:
-      - "4000:4000"
+      - "4400:4000"
     volumes:
       - photo-storage:/app/storage
     environment:

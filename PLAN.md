@@ -124,20 +124,23 @@ A photo event web app for events (bar mitzvah, wedding, etc.) where:
    - Frame includes event name/year, clean professional design
    - Serve framed image
 
-4. **Kiosk print mode**
-   - Frontend page at `/kiosk` — shows new photos as they arrive, one at a time
-   - Each photo displayed with its frame
-   - Print button (triggers `window.print()` with print-specific CSS)
-   - Auto-advance or manual advance
-   - Full-screen friendly, no distractions
+4. **Kiosk unattended print mode**
+    - Frontend page at `/kiosk` — runs unattended, prints every new photo automatically
+    - When a new photo arrives, display it framed on screen with a visible countdown timer (30 seconds)
+    - A "Discard" button lets an operator cancel the pending print during the 30-second window
+    - If not discarded, the photo auto-sends to the printer via `window.print()` with print-specific CSS after the countdown elapses
+    - If discarded, the kiosk immediately waits for the next incoming photo
+    - Full-screen friendly, no distractions — one large framed image, the timer, and the discard button
+    - Uses SSE (`/api/updates`) to receive new photo notifications in real time
 
 ### Success Criteria
 
 - [ ] `/api/event` returns configured event name and details
 - [ ] `/qr` page displays a large, scannable QR code that links to the capture page
 - [ ] `/api/frame/:id` returns a photo with an event frame overlaid
-- [ ] `/kiosk` shows incoming photos one at a time with framing
-- [ ] Print from kiosk mode produces a framed photo on paper
+- [ ] `/kiosk` auto-displays each new incoming photo with a 30-second countdown timer
+- [ ] Photo prints automatically after 30 seconds without user interaction
+- [ ] "Discard" button cancels the pending print and clears the image so the next photo loads on arrival
 - [ ] QR code is scannable from a reasonable distance (>1 meter)
 - [ ] Unit tests for framing logic and event config
 
