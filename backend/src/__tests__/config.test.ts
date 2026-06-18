@@ -184,13 +184,36 @@ describe("Config API", () => {
       expect(res.body.print.paperSize).toBe("A4"); // default
     });
 
-    it("returns all required fields for any valid config", async () => {
+    it("rejects invalid frame dimensions while preserving valid values", async () => {
+      await request(app).put("/api/config").send({
+        frame: {
+          padding: 40,
+          barHeight: 500,
+          fontSize: 72,
+        },
+      });
+
+      const res = await request(app).put("/api/config").send({
+        frame: {
+          padding: -1,
+          barHeight: 1,
+          fontSize: 1,
+        },
+      });
+
+      expect(res.status).toBe(200);
+      expect(res.body.frame.padding).toBe(40);
+      expect(res.body.frame.barHeight).toBe(500);
+      expect(res.body.frame.fontSize).toBe(72);
+    });
+
+    it("returns all required fields for any config", async () => {
       const res = await request(app).put("/api/config").send({
         event: { name: "Full Test", year: "3000" },
         frame: {
-          padding: 1,
-          barHeight: 1,
-          fontSize: 1,
+          padding: 40,
+          barHeight: 500,
+          fontSize: 72,
           barColor: "#000000",
           barTextColor: "#ffffff",
           subtextColor: "#000000",

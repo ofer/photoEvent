@@ -22,17 +22,25 @@ interface Config {
 
 const COUNTDOWN_SECONDS = 30;
 
-// Paper size to @page size mapping (CSS values)
-const PAPER_CSS: Record<string, string> = {
-  A4: "A4",
-  "10x15cm": "10cm 15cm",
-  "5x7in": "5in 7in",
-  "8x10in": "8in 10in",
-  letter: "letter",
+// Paper size metadata: CSS @page value + explicit px dimensions for print
+const PAPER_SIZES: Record<string, { css: string; pxW: number; pxH: number; orientation: string }> = {
+  A4:          { css: "A4",          pxW: 1239, pxH: 1754, orientation: "portrait" },
+  "10x15cm":   { css: "10cm 15cm",  pxW: 378,  pxH: 567,  orientation: "landscape" },
+  "5x7in":     { css: "5in 7in",    pxW: 480,  pxH: 672,  orientation: "portrait" },
+  "8x10in":    { css: "8in 10in",   pxW: 768,  pxH: 960,  orientation: "portrait" },
+  letter:      { css: "letter",     pxW: 1224, pxH: 1584, orientation: "portrait" },
+};
+
+// Map user-facing paper size to Chrome standard paper size name + mm dimensions
+const CHROME_PAPER: Record<string, { name: string; wMm: number; hMm: number }> = {
+  A4:          { name: "A4",          wMm: 210, hMm: 297 },
+  "5x7in":     { name: "5x7_in",      wMm: 127, hMm: 178 },
+  "8x10in":    { name: "8x10_in",     wMm: 203, hMm: 254 },
+  letter:      { name: "LETTER",      wMm: 216, hMm: 279 },
 };
 
 export default function KioskPage() {
-  const [photo, setPhoto] = useState<Photo | null>(null);
+  const [photoQueue, setPhotoQueue] = useState<Photo[]>([]);
   const [countdown, setCountdown] = useState<number>(COUNTDOWN_SECONDS);
   const [printing, setPrinting] = useState(false);
   const [error, setError] = useState("");
@@ -45,11 +53,12 @@ export default function KioskPage() {
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const countdownRef = useRef<number>(COUNTDOWN_SECONDS);
   const sourceRef = useRef<EventSource | null>(null);
-  const startCountdownRef = useRef<((p: Photo) => void)>(null);
 
-  const startCountdown = useCallback((p: Photo) => {
+  const currentPhoto = photoQueue[0] || null;
+  const queueLength = photoQueue.length;
+
+  const startCountdownForNext = useCallback(() => {
     setPhotoKey((k) => k + 1);
-    setPhoto(p);
     setPrinting(true);
     countdownRef.current = COUNTDOWN_SECONDS;
     setCountdown(countdownRef.current);
@@ -65,8 +74,6 @@ export default function KioskPage() {
       }
     }, 1000);
   }, []);
-
-  startCountdownRef.current = startCountdown;
 
   // Fetch print config
   useEffect(() => {
@@ -84,7 +91,14 @@ export default function KioskPage() {
     evtSource.onmessage = (event) => {
       try {
         const photo = JSON.parse(event.data);
-        startCountdownRef.current?.(photo);
+        setPhotoQueue((prev) => {
+          const updated = [...prev, photo];
+          // Start countdown only when transitioning from empty to non-empty
+          if (prev.length === 0) {
+            startCountdownForNext();
+          }
+          return updated;
+        });
       } catch {
         // ignore parse errors
       }
@@ -101,20 +115,48 @@ export default function KioskPage() {
       evtSource.close();
       if (timerRef.current) clearInterval(timerRef.current);
     };
-  }, []);
+  }, [startCountdownForNext]);
 
   // Auto-print when countdown hits 0
   useEffect(() => {
-    if (countdown === 0 && photo && printing) {
+    if (countdown === 0 && photoQueue.length > 0 && printing) {
       setTimeout(() => {
-        window.print();
-        setTimeout(() => {
-          setPhoto(null);
-          setPrinting(false);
-        }, 500);
+        const chrome = (window as { chrome?: { printToPreview: (c: unknown, cb: (r: unknown) => void) => void } }).chrome;
+        const chromeCfg = CHROME_PAPER[printConfig.paperSize];
+        if (chrome && chromeCfg) {
+          const { name: chromeName, wMm, hMm } = chromeCfg;
+          chrome.printToPreview({
+            mediaSize: {
+              name: "CUSTOM",
+              display_name: "Custom",
+              width_microns: Math.round(wMm * 3937.01),
+              height_microns: Math.round(hMm * 3937.01),
+              imageable_area_left_microns: 0,
+              imageable_area_top_microns: 0,
+              imageable_area_right_microns: Math.round(wMm * 3937.01),
+              imageable_area_bottom_microns: Math.round(hMm * 3937.01),
+            },
+            targetName: chromeName,
+            landscape: printConfig.orientation === "landscape",
+            marginsType: 0,
+            shouldPrintBackgrounds: true,
+            shouldPrintSelectionOnly: false,
+          }, () => { window.print(); });
+        } else {
+          window.print();
+        }
+        // Advance queue after print dialog
+        setPhotoQueue((prev) => {
+          const remaining = prev.slice(1);
+          setPrinting(remaining.length > 0);
+          if (remaining.length > 0) {
+            startCountdownForNext();
+          }
+          return remaining;
+        });
       }, 300);
     }
-  }, [countdown, photo, printing]);
+  }, [countdown, printing, printConfig.paperSize, printConfig.orientation, startCountdownForNext]);
 
   const timerColor =
     countdown > 15
@@ -124,22 +166,27 @@ export default function KioskPage() {
       : "text-red-400";
 
   const progressPct = (countdown / COUNTDOWN_SECONDS) * 100;
-  const cssPaperSize = PAPER_CSS[printConfig.paperSize] || "A4";
-  const printOrientation = printConfig.orientation || "landscape";
+  const paperMeta = PAPER_SIZES[printConfig.paperSize] || PAPER_SIZES["A4"];
+  const cssPaperSize = paperMeta.css;
+  const printOrientation = printConfig.orientation || paperMeta.orientation;
+  const pxW = paperMeta.pxW;
+  const pxH = paperMeta.pxH;
 
   return (
     <main className="min-h-screen bg-black flex items-center justify-center relative select-none overflow-hidden">
-      {!photo || !printing ? (
+      {!currentPhoto || !printing ? (
         <div className="text-center fade-in">
           <div className="w-10 h-10 mx-auto mb-3 rounded-full border-2 border-white/20 border-t-white/80 animate-spin" />
-          <p className="text-white/50 text-xs sm:text-sm font-medium">Waiting for photos…</p>
+          <p className="text-white/50 text-xs sm:text-sm font-medium">
+            Waiting for photos{queueLength > 0 ? ` (${queueLength - 1} more in queue)` : "…"}
+          </p>
         </div>
       ) : (
         <div key={photoKey} className="kiosk-print-area w-full h-full flex flex-col items-center justify-center">
           {/* Photo with fade transition */}
           <div className="relative flex items-center justify-center w-full">
             <img
-              src={`/api/frame/${photo.id}`}
+              src={`/api/frame/${currentPhoto.id}`}
               alt="Captured photo"
               className="max-w-[94vw] sm:max-w-[96vw] max-h-[84vh] sm:max-h-[86vh] object-contain photo-enter"
             />
@@ -181,15 +228,27 @@ export default function KioskPage() {
               </span>
             </div>
 
+            {/* Queue indicator */}
+            {queueLength > 1 && (
+              <span className="text-white/50 text-[10px] sm:text-xs font-medium mb-1.5 sm:mb-2">
+                {queueLength} photo{queueLength > 1 ? "s" : ""} in queue
+              </span>
+            )}
+
             {/* Discard button */}
             <button
               onClick={() => {
                 if (timerRef.current) clearInterval(timerRef.current);
                 timerRef.current = null;
                 countdownRef.current = COUNTDOWN_SECONDS;
-                setPhoto(null);
-                setPrinting(false);
-                setCountdown(COUNTDOWN_SECONDS);
+                setPhotoQueue((prev) => {
+                  const remaining = prev.slice(1);
+                  setPrinting(remaining.length > 0);
+                  if (remaining.length > 0) {
+                    startCountdownForNext();
+                  }
+                  return remaining;
+                });
               }}
               className="px-5 py-2 sm:px-6 sm:py-2.5 bg-white/10 hover:bg-white/20 active:bg-white/30 text-white/80 hover:text-white rounded-lg text-xs sm:text-sm font-medium transition-colors backdrop-blur-sm"
             >
@@ -206,12 +265,12 @@ export default function KioskPage() {
         </div>
       )}
 
-      {/* Print CSS — dynamic paper size */}
+      {/* Print CSS — explicit paper-dimension sizing */}
       <style>{`
         @media print {
           @page {
             size: ${cssPaperSize} ${printOrientation};
-            margin: ${printConfig.margin};
+            margin: 0;
           }
 
           body * {
@@ -222,19 +281,22 @@ export default function KioskPage() {
             visibility: visible;
           }
           .kiosk-print-area {
-            position: absolute;
+            position: fixed;
             left: 0;
             top: 0;
-            width: 100%;
-            height: 100%;
+            width: ${pxW}px;
+            height: ${pxH}px;
             display: flex;
             align-items: center;
             justify-content: center;
           }
           .kiosk-print-area > div:first-child {
             position: static;
-            width: 100%;
-            height: 100%;
+            width: ${pxW}px;
+            height: ${pxH}px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
           }
           .kiosk-print-area img {
             max-width: 100% !important;

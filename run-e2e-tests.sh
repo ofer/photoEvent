@@ -27,7 +27,7 @@ rm -rf "$BACKEND_DIR/storage"/*
 
 echo "Starting backend on port $BACKEND_PORT..."
 cd "$BACKEND_DIR"
-PORT=$BACKEND_PORT NODE_ENV=e2e npx tsx src/index.ts > /tmp/backend.log 2>&1 &
+PORT=$BACKEND_PORT NODE_ENV=e2e EVENT_NAME=PhotoEvent npx tsx src/index.ts > /tmp/backend.log 2>&1 &
 BACKEND_PID=$!
 
 echo "Starting frontend on port $FRONTEND_PORT..."

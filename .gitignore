@@ -34,3 +34,6 @@ storage/*
 deployment/.env
 
 .omo/
+
+test-results/
+.next/

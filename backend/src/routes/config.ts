@@ -24,6 +24,25 @@ function getDefaultConfig() {
   };
 }
 
+// Env vars act as fallback defaults when no config file exists.
+// Once the user has explicitly saved config via the UI, env vars
+// do NOT override their persisted values.
+function getDefaultConfigWithoutEnv(): ReturnType<typeof getDefaultConfig> {
+  return {
+    event: { name: "PhotoEvent", year: "2026" },
+    frame: {
+      padding: 40,
+      barHeight: 100,
+      fontSize: 36,
+      barColor: "#1e1e1e",
+      barTextColor: "#ffffff",
+      subtextColor: "#cccccc",
+      backgroundColor: "#ffffff",
+    },
+    print: { paperSize: "A4", orientation: "landscape", margin: "10mm" },
+  };
+}
+
 function loadConfig() {
   try {
     if (fs.existsSync(CONFIG_PATH)) {
@@ -43,14 +62,31 @@ function saveConfig(config: ReturnType<typeof getDefaultConfig>) {
 }
 
 function mergeWithDefaults(config: Partial<ReturnType<typeof getDefaultConfig>>): ReturnType<typeof getDefaultConfig> {
-  // Env vars take precedence over everything for event settings when set
-  const envOverrides: Record<string, string> = {};
-  if (process.env.EVENT_NAME) envOverrides.name = process.env.EVENT_NAME;
-  if (process.env.EVENT_YEAR) envOverrides.year = process.env.EVENT_YEAR;
+  const defaults = getDefaultConfigWithoutEnv();
   return {
-    event: { ...getDefaultConfig().event, ...config.event, ...envOverrides },
-    frame: { ...getDefaultConfig().frame, ...config.frame },
-    print: { ...getDefaultConfig().print, ...config.print },
+    event: { ...defaults.event, ...config.event },
+    frame: { ...defaults.frame, ...config.frame },
+    print: { ...defaults.print, ...config.print },
+  };
+}
+
+function sanitizeFrame(
+  incoming: Partial<ReturnType<typeof getDefaultConfig>["frame"]>,
+  existing: ReturnType<typeof getDefaultConfig>["frame"],
+): ReturnType<typeof getDefaultConfig>["frame"] {
+  const sanitize = <T extends number>(value: T | undefined, fallback: T, min: number, max: number): T =>
+    typeof value === "number" && Number.isFinite(value) && value >= min && value <= max
+      ? (value as T)
+      : fallback;
+
+  return {
+    padding: sanitize(incoming.padding, existing.padding ?? 40, 0, 200),
+    barHeight: sanitize(incoming.barHeight, existing.barHeight ?? 100, 50, 1000),
+    fontSize: sanitize(incoming.fontSize, existing.fontSize ?? 36, 8, 200),
+    barColor: incoming.barColor ?? existing.barColor ?? "#1e1e1e",
+    barTextColor: incoming.barTextColor ?? existing.barTextColor ?? "#ffffff",
+    subtextColor: incoming.subtextColor ?? existing.subtextColor ?? "#cccccc",
+    backgroundColor: incoming.backgroundColor ?? existing.backgroundColor ?? "#ffffff",
   };
 }
 
@@ -65,7 +101,9 @@ router.put("/", (req: Request, res: Response) => {
 
   const config = mergeWithDefaults({
     event: req.body.event ? { ...existing.event, ...req.body.event } : existing.event,
-    frame: req.body.frame ? { ...existing.frame, ...req.body.frame } : existing.frame,
+    frame: req.body.frame
+      ? sanitizeFrame(req.body.frame, existing.frame)
+      : existing.frame,
     print: req.body.print ? { ...existing.print, ...req.body.print } : existing.print,
   });
 

@@ -60,12 +60,26 @@ router.get("/:id", async (req: Request, res: Response) => {
       bgBuffer[i + 2] = bgB;
     }
 
-    // Build SVG text overlay for bottom bar (explicit viewBox ensures correct dimensions)
+    // Compute text baselines for a vertically centered two-line block.
+    // SVG positions text by baseline, so first center the full visual block
+    // (name line + gap + year line), then convert each line top to baseline.
+    const nameFontSize = FONT_SIZE;
+    const yearFontSize = Math.max(FONT_SIZE - 8, 8);
+    const lineGap = Math.round(FONT_SIZE * 0.25);
+    const baselineRatio = 0.8;
+    const textBlockHeight = nameFontSize + lineGap + yearFontSize;
+    const textBlockTop = (BOTTOM_BAR_HEIGHT - textBlockHeight) / 2;
+    const nameBaseline = Math.round(textBlockTop + nameFontSize * baselineRatio);
+    const yearBaseline = Math.round(
+      textBlockTop + nameFontSize + lineGap + yearFontSize * baselineRatio
+    );
+
+    // Build SVG text overlay for bottom bar
     const svgOverlay = Buffer.from(
       `<svg xmlns="http://www.w3.org/2000/svg" width="${frameW}" height="${BOTTOM_BAR_HEIGHT}">
         <rect x="0" y="0" width="${frameW}" height="${BOTTOM_BAR_HEIGHT}" fill="${barColor}"/>
-        <text x="50%" y="36" text-anchor="middle" fill="${barTextColor}" font-family="DejaVu Sans, Helvetica, Arial, sans-serif" font-weight="bold" font-size="${FONT_SIZE}">${eventCfg.name}</text>
-        <text x="50%" y="70" text-anchor="middle" fill="${subtextColor}" font-family="DejaVu Sans, Helvetica, Arial, sans-serif" font-size="${FONT_SIZE - 8}">${eventCfg.year}</text>
+        <text x="50%" y="${nameBaseline}" text-anchor="middle" fill="${barTextColor}" font-family="DejaVu Sans, Helvetica, Arial, sans-serif" font-weight="bold" font-size="${FONT_SIZE}">${eventCfg.name}</text>
+        <text x="50%" y="${yearBaseline}" text-anchor="middle" fill="${subtextColor}" font-family="DejaVu Sans, Helvetica, Arial, sans-serif" font-size="${yearFontSize}">${eventCfg.year}</text>
       </svg>`
     );
 
