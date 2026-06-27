@@ -125,7 +125,102 @@ Config settings are saved to `storage/config/settings.json` inside the container
 docker compose -f deployment/docker-compose.yml exec backend rm -f /app/storage/config/settings.json
 ```
 
-## API Reference
+## AI Generation Buttons
+
+The kiosk supports configurable AI generation buttons. Each button triggers a ComfyUI workflow that receives the currently displayed photo and returns a generated result for printing.
+
+### Configuring AI Buttons
+
+There are two ways to set up AI buttons:
+
+#### Via the Config UI
+
+1. Open the **Configuration** page at `http://localhost:3300/config`
+2. Scroll to the **AI** section
+3. Enter your **ComfyUI Server URL** (shared by all buttons, e.g. `http://10.0.0.17:8188`)
+4. Click **Add Button** to create a new button card
+5. For each button, fill in:
+   - **ID** — a unique slug used internally (e.g. `cartoon`, `z-turbo`). No spaces or special characters.
+   - **Label** — the text shown on the kiosk button (e.g. `Cartoon Caricature`)
+   - **Workflow JSON** — the ComfyUI API-format workflow exported from your ComfyUI manager ("Save (API Format)")
+6. Click **Save**
+
+#### Via the settings file
+
+Edit `deployment/settings.json` (or the copy in the Docker volume) directly:
+
+```bash
+# Pull current config, edit, push back
+docker compose -f deployment/docker-compose.yml exec backend cat /app/storage/config/settings.json > deployment/settings.json
+# edit deployment/settings.json
+docker compose -f deployment/docker-compose.yml exec backend cp /app/storage/config/settings.json /tmp/old-settings.json
+cp deployment/settings.json /var/lib/docker/volumes/photo-storage/_data/config/settings.json
+```
+
+Changes are picked up on the next request — no restart needed.
+
+### The `workflowJson` Field
+
+The `workflowJson` field stores a ComfyUI workflow in **API format**. Export it from ComfyUI Manager using **Save (API Format)** (not the normal "Save" button).
+
+Each workflow is a JSON object where each key is a node ID and each value defines the node's `class_type`, `inputs`, and optionally `_meta`.
+
+**How the photo gets into the workflow:**
+
+When a button is clicked, the kiosk:
+1. Fetches the currently displayed framed photo from the backend
+2. Uploads it to your ComfyUI server
+3. Replaces any `LoadImage` node's `image` input with the uploaded filename
+4. Submits the workflow and polls for the result
+
+**Two workflow styles:**
+
+| Style | Description | Example |
+|-------|-------------|---------|
+| **Photo-processing** — takes the framed photo as input, applies an effect, and returns the modified image. Uses a `LoadImage` node that gets wired to the uploaded photo automatically. | A face-blur effect, vintage film look, cartoon filter, etc. | Export a workflow from ComfyUI that has a `LoadImage` node → "Save (API Format)" → paste into `workflowJson` |
+| **Text-to-image** — generates a completely new image from a prompt, ignoring the uploaded photo. Useful for generating themed backgrounds, decorations, or standalone art. | A text-to-image model that generates images from prompts. | Export the workflow as-is → paste into `workflowJson` |
+
+**Text-to-image example** (the `z-image-turbo` workflow in this repo):
+
+```json
+{
+  "9": {
+    "inputs": { "filename_prefix": "z-image-turbo", "images": ["57:8", 0] },
+    "class_type": "SaveImage"
+  },
+  "57:28": {
+    "inputs": { "unet_name": "z_image_turbo_bf16.safetensors", "weight_dtype": "default" },
+    "class_type": "UNETLoader"
+  },
+  "57:29": {
+    "inputs": { "vae_name": "ae.safetensors" },
+    "class_type": "VAELoader"
+  },
+  "57:3": {
+    "inputs": {
+      "seed": 322278038700768, "steps": 8, "cfg": 1, "denoise": 1,
+      "model": ["57:11", 0], "positive": ["57:27", 0], "negative": ["57:33", 0],
+      "latent_image": ["57:13", 0]
+    },
+    "class_type": "KSampler"
+  }
+}
+```
+
+> **Tip:** If you want a photo-processing workflow but your exported JSON doesn't have a `LoadImage` node, check that you're exporting from the correct ComfyUI tab (the one with your input image loaded, not a "Generate New Image" tab).
+
+### API
+
+```
+POST /api/ai/generate
+Body: { "photoId": "abc123.jpg", "buttonId": "z-turbo" }
+Response: { "imageUrl": "data:image/png;base64,..." }
+```
+
+The `buttonId` must match the `id` field of a configured button.
+
+### Running Tests
+
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|

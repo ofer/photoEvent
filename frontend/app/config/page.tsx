@@ -2,6 +2,12 @@
 
 import { useState, useEffect, useCallback } from "react";
 
+interface AiButtonConfig {
+  id: string;
+  label: string;
+  workflowJson: string;
+}
+
 interface Config {
   event: { name: string; year: string };
   frame: {
@@ -14,6 +20,7 @@ interface Config {
     backgroundColor: string;
   };
   print: { paperSize: string; orientation: string; margin: string };
+  ai: { comfyServerUrl: string; buttons: AiButtonConfig[] };
 }
 
 const PAPER_SIZES = [
@@ -36,6 +43,7 @@ const DEFAULT_CONFIG: Config = {
     backgroundColor: "#ffffff",
   },
   print: { paperSize: "A4", orientation: "landscape", margin: "10mm" },
+  ai: { comfyServerUrl: "http://10.0.0.17:8188", buttons: [] },
 };
 
 export default function ConfigPage() {
@@ -75,6 +83,15 @@ export default function ConfigPage() {
     setConfig((prev) => ({
       ...prev,
       [section]: { ...prev[section], [field]: value },
+    }));
+  };
+
+  const setAi = (
+    updater: Config["ai"] | ((prev: Config["ai"]) => Config["ai"])
+  ) => {
+    setConfig((prev) => ({
+      ...prev,
+      ai: typeof updater === "function" ? updater(prev.ai) : updater,
     }));
   };
 
@@ -313,6 +330,109 @@ export default function ConfigPage() {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
               <span>Orientation adjusts automatically</span>
+            </div>
+          </div>
+        </section>
+
+        {/* AI settings */}
+        <section className="bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm">
+          <div className="px-4 sm:px-5 py-3 border-b border-gray-100 bg-gray-50/50">
+            <h2 className="text-sm font-semibold text-gray-900">AI</h2>
+          </div>
+          <div className="p-4 sm:p-5 space-y-4">
+            <div>
+              <label className="block text-xs font-medium text-gray-500 mb-1">ComfyUI Server URL</label>
+              <input
+                type="text"
+                value={config.ai.comfyServerUrl}
+                onChange={(e) => setAi((prev) => ({ ...prev, comfyServerUrl: e.target.value }))}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
+            </div>
+
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-medium text-gray-500">Buttons</label>
+                <button
+                  type="button"
+                  onClick={() => setAi((prev) => ({ ...prev, buttons: [...prev.buttons, { id: "", label: "", workflowJson: "" }] }))}
+                  className="px-3 py-1.5 text-xs font-medium text-blue-600 bg-blue-50 rounded-lg hover:bg-blue-100 active:bg-blue-200 transition-colors"
+                >
+                  Add Button
+                </button>
+              </div>
+
+              {config.ai.buttons.map((button, i) => (
+                <div
+                  key={i}
+                  role="group"
+                  className="p-3 border border-gray-100 rounded-lg space-y-3"
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-medium text-gray-900">Button {i + 1}</span>
+                    <button
+                      type="button"
+                      onClick={() => setAi((prev) => ({ ...prev, buttons: prev.buttons.filter((_, idx) => idx !== i) }))}
+                      aria-label="Delete button"
+                      className="px-2 py-1 text-xs text-red-600 hover:text-red-700 hover:bg-red-50 rounded transition-colors"
+                    >
+                      Delete
+                    </button>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-500 mb-1">ID</label>
+                    <input
+                      type="text"
+                      value={button.id}
+                      onChange={(e) =>
+                        setAi((prev) => ({
+                          ...prev,
+                          buttons: prev.buttons.map((b, idx) =>
+                            idx === i ? { ...b, id: e.target.value } : b
+                          ),
+                        }))
+                      }
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-500 mb-1">Label</label>
+                    <input
+                      type="text"
+                      value={button.label}
+                      onChange={(e) =>
+                        setAi((prev) => ({
+                          ...prev,
+                          buttons: prev.buttons.map((b, idx) =>
+                            idx === i ? { ...b, label: e.target.value } : b
+                          ),
+                        }))
+                      }
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-500 mb-1">Workflow JSON</label>
+                    <textarea
+                      value={button.workflowJson}
+                      onChange={(e) =>
+                        setAi((prev) => ({
+                          ...prev,
+                          buttons: prev.buttons.map((b, idx) =>
+                            idx === i ? { ...b, workflowJson: e.target.value } : b
+                          ),
+                        }))
+                      }
+                      rows={5}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-y"
+                    />
+                  </div>
+                </div>
+              ))}
+
+              {config.ai.buttons.length === 0 && (
+                <div className="text-xs text-gray-400 text-center py-4">No buttons configured</div>
+              )}
             </div>
           </div>
         </section>

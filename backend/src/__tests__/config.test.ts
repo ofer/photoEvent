@@ -293,3 +293,136 @@ describe("Event API reads from config", () => {
     delete process.env.EVENT_YEAR;
   });
 });
+
+describe("AI config section", () => {
+  beforeAll(() => {
+    cleanConfig();
+  });
+
+  afterAll(() => {
+    cleanConfig();
+  });
+
+  beforeEach(() => {
+    if (fs.existsSync(CONFIG_PATH)) {
+      fs.unlinkSync(CONFIG_PATH);
+    }
+  });
+
+  it("returns default AI config with empty buttons array when no config file exists", async () => {
+    const res = await request(app).get("/api/config");
+    expect(res.status).toBe(200);
+    expect(res.body.ai).toBeDefined();
+    expect(res.body.ai.comfyServerUrl).toBe("http://10.0.0.17:8188");
+    expect(Array.isArray(res.body.ai.buttons)).toBe(true);
+    expect(res.body.ai.buttons).toEqual([]);
+  });
+
+  it("persists and returns AI config with buttons", async () => {
+    await request(app).put("/api/config").send({
+      ai: {
+        comfyServerUrl: "http://my-comfy:8188",
+        buttons: [
+          { id: "cartoon", label: "Cartoon Caricature", workflowJson: '{"1":{"class_type":"LoadImage"}}' },
+          { id: "tropical", label: "Tropical Island", workflowJson: '{"1":{"class_type":"LoadImage"}}' },
+        ],
+      },
+    });
+
+    const res = await request(app).get("/api/config");
+    expect(res.body.ai.comfyServerUrl).toBe("http://my-comfy:8188");
+    expect(res.body.ai.buttons).toHaveLength(2);
+    expect(res.body.ai.buttons[0].id).toBe("cartoon");
+    expect(res.body.ai.buttons[0].label).toBe("Cartoon Caricature");
+    expect(res.body.ai.buttons[1].id).toBe("tropical");
+    expect(JSON.parse(res.body.ai.buttons[0].workflowJson)["1"].class_type).toBe("LoadImage");
+  });
+
+  it("preserves existing AI config on partial update to other sections", async () => {
+    await request(app).put("/api/config").send({
+      ai: {
+        comfyServerUrl: "http://my-comfy:8188",
+        buttons: [
+          { id: "cartoon", label: "Cartoon", workflowJson: '{"1":{}}' },
+        ],
+      },
+    });
+
+    await request(app).put("/api/config").send({
+      event: { name: "New Name" },
+    });
+
+    const res = await request(app).get("/api/config");
+    expect(res.body.ai.comfyServerUrl).toBe("http://my-comfy:8188");
+    expect(res.body.ai.buttons).toHaveLength(1);
+    expect(res.body.ai.buttons[0].id).toBe("cartoon");
+    expect(res.body.event.name).toBe("New Name");
+  });
+
+  it("preserves existing buttons on partial ai update", async () => {
+    await request(app).put("/api/config").send({
+      ai: {
+        comfyServerUrl: "http://first:8188",
+        buttons: [
+          { id: "a", label: "A", workflowJson: '{"a":1}' },
+          { id: "b", label: "B", workflowJson: '{"b":2}' },
+        ],
+      },
+    });
+
+    // Update only the server URL — buttons should persist
+    await request(app).put("/api/config").send({
+      ai: { comfyServerUrl: "http://second:8188" },
+    });
+
+    const res = await request(app).get("/api/config");
+    expect(res.body.ai.comfyServerUrl).toBe("http://second:8188");
+    expect(res.body.ai.buttons).toHaveLength(2);
+    expect(res.body.ai.buttons[0].id).toBe("a");
+    expect(res.body.ai.buttons[1].id).toBe("b");
+  });
+
+  it("handles empty buttons array in PUT", async () => {
+    await request(app).put("/api/config").send({
+      ai: {
+        comfyServerUrl: "http://test:8188",
+        buttons: [{ id: "keep", label: "Keep", workflowJson: '{}' }],
+      },
+    });
+
+    // Explicit empty array should clear buttons
+    await request(app).put("/api/config").send({
+      ai: { buttons: [] },
+    });
+
+    const res = await request(app).get("/api/config");
+    expect(res.body.ai.buttons).toEqual([]);
+    // Server URL should fall back to default since it wasn't sent
+    expect(res.body.ai.comfyServerUrl).toBe("http://10.0.0.17:8188");
+  });
+
+  it("handles undefined ai section", async () => {
+    await request(app).put("/api/config").send({
+      event: { name: "Test" },
+    });
+
+    const res = await request(app).get("/api/config");
+    expect(res.body.ai).toBeDefined();
+    expect(res.body.ai.comfyServerUrl).toBe("http://10.0.0.17:8188");
+    expect(res.body.ai.buttons).toEqual([]);
+  });
+
+  it("preserves button IDs for API route selection", async () => {
+    await request(app).put("/api/config").send({
+      ai: {
+        comfyServerUrl: "http://test:8188",
+        buttons: [
+          { id: "cartoon", label: "Cartoon", workflowJson: '{"1":{}}' },
+        ],
+      },
+    });
+
+    const res = await request(app).get("/api/config");
+    expect(res.body.ai.buttons[0].id).toBe("cartoon");
+  });
+});

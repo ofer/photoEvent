@@ -6,6 +6,7 @@ import { sseRouter } from "./routes/sse";
 import { frameRouter } from "./routes/frame";
 import { qrRouter } from "./routes/qr";
 import { configRouter } from "./routes/config";
+import { aiRouter } from "./routes/ai";
 
 const app = express();
 const PORT = process.env.PORT || 4000;
@@ -21,6 +22,7 @@ app.use("/api/config", configRouter);
 app.use("/api/updates", sseRouter);
 app.use("/api/frame", frameRouter);
 app.use("/api/qr", qrRouter);
+app.use("/api/ai", aiRouter);
 
 // Health check
 app.get("/api/health", (_req: Request, res: Response) => {

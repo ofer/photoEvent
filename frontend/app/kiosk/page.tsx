@@ -16,8 +16,18 @@ interface PrintConfig {
   margin: string;
 }
 
+interface AiButtonConfig {
+  id: string;
+  label: string;
+  workflowJson: string;
+}
+
 interface Config {
   print: PrintConfig;
+  ai?: {
+    comfyServerUrl: string;
+    buttons: AiButtonConfig[];
+  };
 }
 
 const COUNTDOWN_SECONDS = 30;
@@ -54,6 +64,15 @@ export default function KioskPage() {
   const countdownRef = useRef<number>(COUNTDOWN_SECONDS);
   const sourceRef = useRef<EventSource | null>(null);
 
+  const [aiConfig, setAiConfig] = useState<{ comfyServerUrl: string; buttons: AiButtonConfig[] }>({
+    comfyServerUrl: "",
+    buttons: [],
+  });
+  const [generating, setGenerating] = useState(false);
+  const [generatingButtonId, setGeneratingButtonId] = useState<string | null>(null);
+  const [generatedImage, setGeneratedImage] = useState<string | null>(null);
+  const [genError, setGenError] = useState("");
+
   const currentPhoto = photoQueue[0] || null;
   const queueLength = photoQueue.length;
 
@@ -79,7 +98,15 @@ export default function KioskPage() {
   useEffect(() => {
     fetch("/api/config")
       .then((r) => r.json())
-      .then((cfg: Config) => setPrintConfig(cfg.print))
+      .then((cfg: Config) => {
+        setPrintConfig(cfg.print);
+        if (cfg.ai) {
+          setAiConfig({
+            comfyServerUrl: cfg.ai.comfyServerUrl || "",
+            buttons: cfg.ai.buttons || [],
+          });
+        }
+      })
       .catch(() => {});
   }, []);
 
@@ -149,6 +176,7 @@ export default function KioskPage() {
         setPhotoQueue((prev) => {
           const remaining = prev.slice(1);
           setPrinting(remaining.length > 0);
+          setGeneratedImage(null);
           if (remaining.length > 0) {
             startCountdownForNext();
           }
@@ -157,6 +185,28 @@ export default function KioskPage() {
       }, 300);
     }
   }, [countdown, printing, printConfig.paperSize, printConfig.orientation, startCountdownForNext]);
+
+  const handleGenerate = async (buttonId: string) => {
+    if (!currentPhoto || generating) return;
+    setGenerating(true);
+    setGeneratingButtonId(buttonId);
+    setGenError("");
+    try {
+      const res = await fetch("/api/ai/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ photoId: currentPhoto.id, buttonId }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Generation failed");
+      setGeneratedImage(data.imageUrl);
+    } catch (err: unknown) {
+      setGenError((err as Error).message || "Generation failed");
+    } finally {
+      setGenerating(false);
+      setGeneratingButtonId(null);
+    }
+  };
 
   const timerColor =
     countdown > 15
@@ -186,7 +236,7 @@ export default function KioskPage() {
           {/* Photo with fade transition */}
           <div className="relative flex items-center justify-center w-full">
             <img
-              src={`/api/frame/${currentPhoto.id}`}
+              src={generatedImage || `/api/frame/${currentPhoto.id}`}
               alt="Captured photo"
               className="max-w-[94vw] sm:max-w-[96vw] max-h-[84vh] sm:max-h-[86vh] object-contain photo-enter"
             />
@@ -235,12 +285,35 @@ export default function KioskPage() {
               </span>
             )}
 
+            {/* AI generation buttons */}
+            {aiConfig.buttons.length > 0 && (
+              <div className="flex flex-wrap gap-3 mt-3 mb-2 justify-center">
+                {aiConfig.buttons.map((btn) => (
+                  <button
+                    key={btn.id}
+                    onClick={() => handleGenerate(btn.id)}
+                    disabled={generating}
+                    className={`px-4 py-2 rounded-lg font-medium transition-colors disabled:opacity-50 ${
+                      generating && generatingButtonId === btn.id
+                        ? "bg-purple-700 text-white ring-2 ring-purple-400"
+                        : "bg-purple-600 hover:bg-purple-700 active:bg-purple-800 text-white"
+                    }`}
+                  >
+                    {generating && generatingButtonId === btn.id
+                      ? `Generating…`
+                      : btn.label}
+                  </button>
+                ))}
+              </div>
+            )}
+
             {/* Discard button */}
             <button
               onClick={() => {
                 if (timerRef.current) clearInterval(timerRef.current);
                 timerRef.current = null;
                 countdownRef.current = COUNTDOWN_SECONDS;
+                setGeneratedImage(null);
                 setPhotoQueue((prev) => {
                   const remaining = prev.slice(1);
                   setPrinting(remaining.length > 0);
@@ -259,9 +332,9 @@ export default function KioskPage() {
       )}
 
       {/* Error toast */}
-      {error && (
+      {(error || genError) && (
         <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-white/10 text-white/70 px-4 py-2 rounded-lg text-xs backdrop-blur-sm">
-          {error}
+          {genError || error}
         </div>
       )}
 

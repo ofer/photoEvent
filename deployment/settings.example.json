@@ -1,0 +1,35 @@
+{
+  "event": {
+    "name": "PhotoEvent",
+    "year": "2026"
+  },
+  "frame": {
+    "padding": 40,
+    "barHeight": 100,
+    "fontSize": 36,
+    "barColor": "#1e1e1e",
+    "barTextColor": "#ffffff",
+    "subtextColor": "#cccccc",
+    "backgroundColor": "#ffffff"
+  },
+  "print": {
+    "paperSize": "A4",
+    "orientation": "landscape",
+    "margin": "10mm"
+  },
+  "ai": {
+    "comfyServerUrl": "http://10.0.0.17:8188",
+    "buttons": [
+      {
+        "id": "cartoon",
+        "label": "Cartoon Caricature",
+        "workflowJson": ""
+      },
+      {
+        "id": "tropical",
+        "label": "Tropical Island",
+        "workflowJson": ""
+      }
+    ]
+  }
+}
