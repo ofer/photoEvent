@@ -87,21 +87,35 @@ describe("Photo API", () => {
       expect(res.body).toHaveProperty("year");
     });
 
-    it("uses env vars when set", async () => {
+    it("uses env vars when no config file exists", async () => {
+      const configPath = path.resolve(__dirname, "../../storage/config/settings.json");
+      const hadConfig = fs.existsSync(configPath);
+      let savedConfig: string | undefined;
+      if (hadConfig) {
+        savedConfig = fs.readFileSync(configPath, "utf-8");
+        fs.unlinkSync(configPath);
+      }
+
       const origName = process.env.EVENT_NAME;
       const origYear = process.env.EVENT_YEAR;
       process.env.EVENT_NAME = "Bar Mitzvah";
       process.env.EVENT_YEAR = "2025";
 
-      const res = await request(app).get("/api/event");
-      expect(res.status).toBe(200);
-      expect(res.body.name).toBe("Bar Mitzvah");
-      expect(res.body.year).toBe("2025");
-
-      if (origName) process.env.EVENT_NAME = origName;
-      else delete process.env.EVENT_NAME;
-      if (origYear) process.env.EVENT_YEAR = origYear;
-      else delete process.env.EVENT_YEAR;
+      try {
+        const res = await request(app).get("/api/event");
+        expect(res.status).toBe(200);
+        expect(res.body.name).toBe("Bar Mitzvah");
+        expect(res.body.year).toBe("2025");
+      } finally {
+        if (origName) process.env.EVENT_NAME = origName;
+        else delete process.env.EVENT_NAME;
+        if (origYear) process.env.EVENT_YEAR = origYear;
+        else delete process.env.EVENT_YEAR;
+        if (hadConfig && savedConfig) {
+          fs.mkdirSync(path.dirname(configPath), { recursive: true });
+          fs.writeFileSync(configPath, savedConfig, "utf-8");
+        }
+      }
     });
   });
 

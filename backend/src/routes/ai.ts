@@ -1,5 +1,6 @@
 import { Request, Response, Router } from "express";
 import { loadConfig } from "./config";
+import { generateFrame } from "./frame";
 
 const router = Router();
 
@@ -156,27 +157,27 @@ router.post("/generate", async (req: Request, res: Response) => {
       workflowStr = JSON.stringify(workflow);
     }
 
-    // Step 1: Get the framed image from our own backend
-    const framedRes = await fetch(`http://127.0.0.1:${process.env.PORT || 4000}/api/frame/${photoId}`);
-    if (!framedRes.ok) {
-      return res.status(400).json({ error: `Failed to fetch framed photo (${framedRes.status})` });
+    const photoRes = await fetch(`http://127.0.0.1:${process.env.PORT || 4000}/api/photos/${photoId}`);
+    if (!photoRes.ok) {
+      return res.status(400).json({ error: `Failed to fetch raw photo (${photoRes.status})` });
     }
-    const framedBuffer = Buffer.from(await framedRes.arrayBuffer());
+    const photoBuffer = Buffer.from(await photoRes.arrayBuffer());
 
-    // Step 2: Upload to ComfyUI
     const uploadResult = await uploadToComfyUI(
       comfyServerUrl,
-      `data:image/jpeg;base64,${framedBuffer.toString("base64")}`,
+      `data:image/jpeg;base64,${photoBuffer.toString("base64")}`,
       `kiosk_${photoId}_${buttonId}.jpg`
     );
 
-    // Step 3: Submit workflow
     const promptId = await submitWorkflow(comfyServerUrl, workflowStr, uploadResult.name, uploadResult.type);
 
-    // Step 4: Wait for result
     const resultImageUrl = await waitForResult(comfyServerUrl, promptId);
 
-    res.json({ imageUrl: resultImageUrl });
+    const base64Data = resultImageUrl.replace(/^data:image\/\w+;base64,/, "");
+    const resultBuffer = Buffer.from(base64Data, "base64");
+    const framedBuffer = await generateFrame(resultBuffer);
+
+    res.json({ imageUrl: `data:image/jpeg;base64,${framedBuffer.toString("base64")}` });
   } catch (err: any) {
     console.error("AI generate error:", err.message);
     res.status(500).json({ error: err.message || "Internal server error" });

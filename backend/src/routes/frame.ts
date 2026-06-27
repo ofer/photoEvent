@@ -14,14 +14,69 @@ function getStorageDir() {
 }
 const STORAGE_DIR = getStorageDir();
 
-function getFrameConfig() {
+async function generateFrame(imageInput: Buffer | string): Promise<Buffer> {
   const cfg = loadConfig();
-  return cfg.frame;
-}
+  const frameCfg = cfg.frame;
+  const eventCfg = cfg.event;
 
-function getEventConfig() {
-  const cfg = loadConfig();
-  return cfg.event;
+  const metadata = await sharp(imageInput).metadata();
+  const imgW = metadata.width;
+  const imgH = metadata.height;
+  if (!imgW || !imgH) {
+    throw new Error("Could not read image dimensions");
+  }
+
+  const { padding: FRAME_PADDING, barHeight: BOTTOM_BAR_HEIGHT, fontSize: FONT_SIZE, barColor, barTextColor, subtextColor, backgroundColor } = frameCfg;
+
+  const frameW = Math.max(imgW, 800);
+  const frameH = imgH + BOTTOM_BAR_HEIGHT + FRAME_PADDING * 2;
+
+  const bgR = parseInt(backgroundColor.slice(1, 3), 16);
+  const bgG = parseInt(backgroundColor.slice(3, 5), 16);
+  const bgB = parseInt(backgroundColor.slice(5, 7), 16);
+  const bgBuffer = Buffer.alloc(frameW * frameH * 4, 255);
+  for (let i = 0; i < bgBuffer.length; i += 4) {
+    bgBuffer[i] = bgR;
+    bgBuffer[i + 1] = bgG;
+    bgBuffer[i + 2] = bgB;
+  }
+
+  const nameFontSize = FONT_SIZE;
+  const yearFontSize = Math.max(FONT_SIZE - 8, 8);
+  const lineGap = Math.round(FONT_SIZE * 0.25);
+  const baselineRatio = 0.8;
+  const textBlockHeight = nameFontSize + lineGap + yearFontSize;
+  const textBlockTop = (BOTTOM_BAR_HEIGHT - textBlockHeight) / 2;
+  const nameBaseline = Math.round(textBlockTop + nameFontSize * baselineRatio);
+  const yearBaseline = Math.round(
+    textBlockTop + nameFontSize + lineGap + yearFontSize * baselineRatio
+  );
+
+  const svgOverlay = Buffer.from(
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${frameW}" height="${BOTTOM_BAR_HEIGHT}">
+      <rect x="0" y="0" width="${frameW}" height="${BOTTOM_BAR_HEIGHT}" fill="${barColor}"/>
+      <text x="50%" y="${nameBaseline}" text-anchor="middle" fill="${barTextColor}" font-family="DejaVu Sans, Helvetica, Arial, sans-serif" font-weight="bold" font-size="${FONT_SIZE}">${eventCfg.name}</text>
+      <text x="50%" y="${yearBaseline}" text-anchor="middle" fill="${subtextColor}" font-family="DejaVu Sans, Helvetica, Arial, sans-serif" font-size="${yearFontSize}">${eventCfg.year}</text>
+    </svg>`
+  );
+
+  return sharp(bgBuffer, {
+    raw: { width: frameW, height: frameH, channels: 4 },
+  })
+    .composite([
+      {
+        input: imageInput,
+        top: FRAME_PADDING,
+        left: Math.floor((frameW - imgW) / 2),
+      },
+      {
+        input: svgOverlay,
+        top: imgH + FRAME_PADDING,
+        left: 0,
+      },
+    ])
+    .jpeg({ quality: 90, mozjpeg: false })
+    .toBuffer();
 }
 
 // GET /api/frame/:id
@@ -34,74 +89,7 @@ router.get("/:id", async (req: Request, res: Response) => {
   }
 
   try {
-    const frameCfg = getFrameConfig();
-    const eventCfg = getEventConfig();
-
-    // Read original photo dimensions
-    const metadata = await sharp(filePath).metadata();
-    const { width: imgW, height: imgH } = metadata;
-    if (!imgW || !imgH) {
-      throw new Error("Could not read image dimensions");
-    }
-
-    const { padding: FRAME_PADDING, barHeight: BOTTOM_BAR_HEIGHT, fontSize: FONT_SIZE, barColor, barTextColor, subtextColor, backgroundColor } = frameCfg;
-
-    // Layout: bottom bar at bottom, photo takes remaining space
-    const frameW = Math.max(imgW, 800);
-    const frameH = imgH + BOTTOM_BAR_HEIGHT + FRAME_PADDING * 2;
-
-    const bgR = parseInt(backgroundColor.slice(1, 3), 16);
-    const bgG = parseInt(backgroundColor.slice(3, 5), 16);
-    const bgB = parseInt(backgroundColor.slice(5, 7), 16);
-    const bgBuffer = Buffer.alloc(frameW * frameH * 4, 255);
-    for (let i = 0; i < bgBuffer.length; i += 4) {
-      bgBuffer[i] = bgR;
-      bgBuffer[i + 1] = bgG;
-      bgBuffer[i + 2] = bgB;
-    }
-
-    // Compute text baselines for a vertically centered two-line block.
-    // SVG positions text by baseline, so first center the full visual block
-    // (name line + gap + year line), then convert each line top to baseline.
-    const nameFontSize = FONT_SIZE;
-    const yearFontSize = Math.max(FONT_SIZE - 8, 8);
-    const lineGap = Math.round(FONT_SIZE * 0.25);
-    const baselineRatio = 0.8;
-    const textBlockHeight = nameFontSize + lineGap + yearFontSize;
-    const textBlockTop = (BOTTOM_BAR_HEIGHT - textBlockHeight) / 2;
-    const nameBaseline = Math.round(textBlockTop + nameFontSize * baselineRatio);
-    const yearBaseline = Math.round(
-      textBlockTop + nameFontSize + lineGap + yearFontSize * baselineRatio
-    );
-
-    // Build SVG text overlay for bottom bar
-    const svgOverlay = Buffer.from(
-      `<svg xmlns="http://www.w3.org/2000/svg" width="${frameW}" height="${BOTTOM_BAR_HEIGHT}">
-        <rect x="0" y="0" width="${frameW}" height="${BOTTOM_BAR_HEIGHT}" fill="${barColor}"/>
-        <text x="50%" y="${nameBaseline}" text-anchor="middle" fill="${barTextColor}" font-family="DejaVu Sans, Helvetica, Arial, sans-serif" font-weight="bold" font-size="${FONT_SIZE}">${eventCfg.name}</text>
-        <text x="50%" y="${yearBaseline}" text-anchor="middle" fill="${subtextColor}" font-family="DejaVu Sans, Helvetica, Arial, sans-serif" font-size="${yearFontSize}">${eventCfg.year}</text>
-      </svg>`
-    );
-
-    // Composite: background + original photo + SVG bottom bar
-    const frame = await sharp(bgBuffer, {
-      raw: { width: frameW, height: frameH, channels: 4 },
-    })
-      .composite([
-        {
-          input: filePath,
-          top: FRAME_PADDING,
-          left: Math.floor((frameW - imgW) / 2),
-        },
-        {
-          input: svgOverlay,
-          top: imgH + FRAME_PADDING,
-          left: 0,
-        },
-      ])
-      .jpeg({ quality: 90, mozjpeg: false })
-      .toBuffer();
-
+    const frame = await generateFrame(filePath);
     res.set("Content-Type", "image/jpeg");
     res.send(frame);
   } catch (err) {
@@ -110,4 +98,4 @@ router.get("/:id", async (req: Request, res: Response) => {
   }
 });
 
-export { router as frameRouter };
+export { router as frameRouter, generateFrame };

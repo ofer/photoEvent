@@ -127,7 +127,7 @@ docker compose -f deployment/docker-compose.yml exec backend rm -f /app/storage/
 
 ## AI Generation Buttons
 
-The kiosk supports configurable AI generation buttons. Each button triggers a ComfyUI workflow that receives the currently displayed photo and returns a generated result for printing.
+The kiosk supports configurable AI generation buttons. Each button triggers a ComfyUI workflow that receives the raw uploaded photo (without the event frame) and returns a generated result for printing. Generated results are then processed by the kiosk like any other photo and can be framed and printed.
 
 ### Configuring AI Buttons
 
@@ -168,16 +168,17 @@ Each workflow is a JSON object where each key is a node ID and each value define
 **How the photo gets into the workflow:**
 
 When a button is clicked, the kiosk:
-1. Fetches the currently displayed framed photo from the backend
+1. Fetches the raw uploaded photo (without the event frame) from the backend
 2. Uploads it to your ComfyUI server
 3. Replaces any `LoadImage` node's `image` input with the uploaded filename
 4. Submits the workflow and polls for the result
+5. Applies the event frame to the generated result before displaying it for printing
 
 **Two workflow styles:**
 
 | Style | Description | Example |
 |-------|-------------|---------|
-| **Photo-processing** — takes the framed photo as input, applies an effect, and returns the modified image. Uses a `LoadImage` node that gets wired to the uploaded photo automatically. | A face-blur effect, vintage film look, cartoon filter, etc. | Export a workflow from ComfyUI that has a `LoadImage` node → "Save (API Format)" → paste into `workflowJson` |
+| **Photo-processing** — takes the raw uploaded photo as input, applies an effect, and returns the modified image. The event frame is not applied before ComfyUI processing. Uses a `LoadImage` node that gets wired to the uploaded photo automatically. | A face-blur effect, vintage film look, cartoon filter, etc. | Export a workflow from ComfyUI that has a `LoadImage` node → "Save (API Format)" → paste into `workflowJson` |
 | **Text-to-image** — generates a completely new image from a prompt, ignoring the uploaded photo. Useful for generating themed backgrounds, decorations, or standalone art. | A text-to-image model that generates images from prompts. | Export the workflow as-is → paste into `workflowJson` |
 
 **Text-to-image example** (the `z-image-turbo` workflow in this repo):
