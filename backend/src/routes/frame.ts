@@ -19,21 +19,28 @@ async function generateFrame(imageInput: Buffer | string): Promise<Buffer> {
   const frameCfg = cfg.frame;
   const eventCfg = cfg.event;
 
-  const metadata = await sharp(imageInput).metadata();
+  // Rotate to apply EXIF orientation tag, then read metadata from the
+  // correctly-oriented buffer. This ensures frame dimensions are computed
+  // from the intended orientation (e.g. portrait), not the raw pixel layout
+  // (which phones store as landscape with an EXIF rotation hint).
+  const rotated = await sharp(imageInput).rotate().jpeg().toBuffer();
+  const metadata = await sharp(rotated).metadata();
   const imgW = metadata.width;
   const imgH = metadata.height;
   if (!imgW || !imgH) {
     throw new Error("Could not read image dimensions");
   }
 
-  const { padding: FRAME_PADDING, barHeight: BOTTOM_BAR_HEIGHT, fontSize: FONT_SIZE, barColor, barTextColor, subtextColor, backgroundColor } = frameCfg;
+  const padding = Math.round(imgW * frameCfg.paddingPct);
+  const barHeight = Math.round(imgH * frameCfg.barHeightPct);
+  const fontSize = Math.round(imgW * frameCfg.fontSizePct);
 
-  const frameW = Math.max(imgW, 800);
-  const frameH = imgH + BOTTOM_BAR_HEIGHT + FRAME_PADDING * 2;
+  const frameW = imgW;
+  const frameH = imgH + barHeight + padding * 2;
 
-  const bgR = parseInt(backgroundColor.slice(1, 3), 16);
-  const bgG = parseInt(backgroundColor.slice(3, 5), 16);
-  const bgB = parseInt(backgroundColor.slice(5, 7), 16);
+  const bgR = parseInt(frameCfg.backgroundColor.slice(1, 3), 16);
+  const bgG = parseInt(frameCfg.backgroundColor.slice(3, 5), 16);
+  const bgB = parseInt(frameCfg.backgroundColor.slice(5, 7), 16);
   const bgBuffer = Buffer.alloc(frameW * frameH * 4, 255);
   for (let i = 0; i < bgBuffer.length; i += 4) {
     bgBuffer[i] = bgR;
@@ -41,22 +48,22 @@ async function generateFrame(imageInput: Buffer | string): Promise<Buffer> {
     bgBuffer[i + 2] = bgB;
   }
 
-  const nameFontSize = FONT_SIZE;
-  const yearFontSize = Math.max(FONT_SIZE - 8, 8);
-  const lineGap = Math.round(FONT_SIZE * 0.25);
+  const nameFontSize = fontSize;
+  const yearFontSize = Math.max(Math.round(fontSize * 0.75), 8);
+  const lineGap = Math.round(fontSize * 0.25);
   const baselineRatio = 0.8;
   const textBlockHeight = nameFontSize + lineGap + yearFontSize;
-  const textBlockTop = (BOTTOM_BAR_HEIGHT - textBlockHeight) / 2;
+  const textBlockTop = (barHeight - textBlockHeight) / 2;
   const nameBaseline = Math.round(textBlockTop + nameFontSize * baselineRatio);
   const yearBaseline = Math.round(
     textBlockTop + nameFontSize + lineGap + yearFontSize * baselineRatio
   );
 
   const svgOverlay = Buffer.from(
-    `<svg xmlns="http://www.w3.org/2000/svg" width="${frameW}" height="${BOTTOM_BAR_HEIGHT}">
-      <rect x="0" y="0" width="${frameW}" height="${BOTTOM_BAR_HEIGHT}" fill="${barColor}"/>
-      <text x="50%" y="${nameBaseline}" text-anchor="middle" fill="${barTextColor}" font-family="DejaVu Sans, Helvetica, Arial, sans-serif" font-weight="bold" font-size="${FONT_SIZE}">${eventCfg.name}</text>
-      <text x="50%" y="${yearBaseline}" text-anchor="middle" fill="${subtextColor}" font-family="DejaVu Sans, Helvetica, Arial, sans-serif" font-size="${yearFontSize}">${eventCfg.year}</text>
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${frameW}" height="${barHeight}">
+      <rect x="0" y="0" width="${frameW}" height="${barHeight}" fill="${frameCfg.barColor}"/>
+      <text x="50%" y="${nameBaseline}" text-anchor="middle" fill="${frameCfg.barTextColor}" font-family="DejaVu Sans, Helvetica, Arial, sans-serif" font-weight="bold" font-size="${nameFontSize}">${eventCfg.name}</text>
+      <text x="50%" y="${yearBaseline}" text-anchor="middle" fill="${frameCfg.subtextColor}" font-family="DejaVu Sans, Helvetica, Arial, sans-serif" font-size="${yearFontSize}">${eventCfg.year}</text>
     </svg>`
   );
 
@@ -65,13 +72,13 @@ async function generateFrame(imageInput: Buffer | string): Promise<Buffer> {
   })
     .composite([
       {
-        input: imageInput,
-        top: FRAME_PADDING,
+        input: rotated,
+        top: padding,
         left: Math.floor((frameW - imgW) / 2),
       },
       {
         input: svgOverlay,
-        top: imgH + FRAME_PADDING,
+        top: imgH + padding,
         left: 0,
       },
     ])

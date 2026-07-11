@@ -23,9 +23,9 @@ function getDefaultConfig() {
   return {
     event: { name: process.env.EVENT_NAME || "PhotoEvent", year: process.env.EVENT_YEAR || "2026" },
     frame: {
-      padding: 40,
-      barHeight: 100,
-      fontSize: 36,
+      paddingPct: 0.025,
+      barHeightPct: 0.10,
+      fontSizePct: 0.0225,
       barColor: "#1e1e1e",
       barTextColor: "#ffffff",
       subtextColor: "#cccccc",
@@ -43,9 +43,9 @@ function getDefaultConfigWithoutEnv(): ReturnType<typeof getDefaultConfig> {
   return {
     event: { name: "PhotoEvent", year: "2026" },
     frame: {
-      padding: 40,
-      barHeight: 100,
-      fontSize: 36,
+      paddingPct: 0.025,
+      barHeightPct: 0.10,
+      fontSizePct: 0.0225,
       barColor: "#1e1e1e",
       barTextColor: "#ffffff",
       subtextColor: "#cccccc",
@@ -146,15 +146,59 @@ function sanitizeFrame(
       ? (value as T)
       : fallback;
 
-  return {
-    padding: sanitize(incoming.padding, existing.padding ?? 40, 0, 200),
-    barHeight: sanitize(incoming.barHeight, existing.barHeight ?? 100, 50, 1000),
-    fontSize: sanitize(incoming.fontSize, existing.fontSize ?? 36, 8, 200),
-    barColor: incoming.barColor ?? existing.barColor ?? "#1e1e1e",
-    barTextColor: incoming.barTextColor ?? existing.barTextColor ?? "#ffffff",
-    subtextColor: incoming.subtextColor ?? existing.subtextColor ?? "#cccccc",
-    backgroundColor: incoming.backgroundColor ?? existing.backgroundColor ?? "#ffffff",
+  const DEFAULT_FRAME = getDefaultConfigWithoutEnv().frame;
+
+  // Type for migration: includes both new percentage fields and old pixel fields
+  type FrameMigrationData = {
+    paddingPct: number | undefined;
+    barHeightPct: number | undefined;
+    fontSizePct: number | undefined;
+    padding: number | undefined;
+    barHeight: number | undefined;
+    fontSize: number | undefined;
+    barColor: string | undefined;
+    barTextColor: string | undefined;
+    subtextColor: string | undefined;
+    backgroundColor: string | undefined;
   };
+
+  // Migrate old absolute-pixel values (padding, barHeight, fontSize) to proportional percentages.
+  // Uses a 1600×900 reference image as the conversion baseline.
+  function migrate(mData: FrameMigrationData, incoming: Partial<ReturnType<typeof getDefaultConfig>["frame"]>): ReturnType<typeof getDefaultConfig>["frame"] {
+    const REF_W = 1600;
+    const REF_H = 900;
+    const paddingPct = sanitize(incoming.paddingPct, mData.paddingPct ?? mData.padding! / REF_W, 0.01, 0.15);
+    const barHeightPct = sanitize(incoming.barHeightPct, mData.barHeightPct ?? mData.barHeight! / REF_H, 0.03, 0.30);
+    const fontSizePct = sanitize(incoming.fontSizePct, mData.fontSizePct ?? mData.fontSize! / REF_W, 0.008, 0.10);
+    return {
+      paddingPct,
+      barHeightPct,
+      fontSizePct,
+      barColor: incoming.barColor ?? mData.barColor ?? DEFAULT_FRAME.barColor,
+      barTextColor: incoming.barTextColor ?? mData.barTextColor ?? DEFAULT_FRAME.barTextColor,
+      subtextColor: incoming.subtextColor ?? mData.subtextColor ?? DEFAULT_FRAME.subtextColor,
+      backgroundColor: incoming.backgroundColor ?? mData.backgroundColor ?? DEFAULT_FRAME.backgroundColor,
+    };
+  }
+
+  // Determine the "old" config values to use for migration fallback.
+  const raw = loadRawConfig();
+  const rawFrame = raw.frame as { padding?: number; barHeight?: number; fontSize?: number; barColor?: string; barTextColor?: string; subtextColor?: string; backgroundColor?: string } | undefined;
+  const e = existing as Record<string, unknown>;
+  const mData: FrameMigrationData = {
+    paddingPct: e.paddingPct as number | undefined ?? DEFAULT_FRAME.paddingPct,
+    barHeightPct: e.barHeightPct as number | undefined ?? DEFAULT_FRAME.barHeightPct,
+    fontSizePct: e.fontSizePct as number | undefined ?? DEFAULT_FRAME.fontSizePct,
+    padding: (rawFrame?.padding as number) ?? 40,
+    barHeight: (rawFrame?.barHeight as number) ?? 100,
+    fontSize: (rawFrame?.fontSize as number) ?? 36,
+    barColor: rawFrame?.barColor ?? (e.barColor as string) ?? DEFAULT_FRAME.barColor,
+    barTextColor: rawFrame?.barTextColor ?? (e.barTextColor as string) ?? DEFAULT_FRAME.barTextColor,
+    subtextColor: rawFrame?.subtextColor ?? (e.subtextColor as string) ?? DEFAULT_FRAME.subtextColor,
+    backgroundColor: rawFrame?.backgroundColor ?? (e.backgroundColor as string) ?? DEFAULT_FRAME.backgroundColor,
+  };
+
+  return migrate(mData, incoming);
 }
 
 // GET /api/config

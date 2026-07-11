@@ -44,9 +44,9 @@ describe("Config API", () => {
       await request(app).put("/api/config").send({
         event: { name: "Sarah's Bat Mitzvah", year: "2026" },
         frame: {
-          padding: 60,
-          barHeight: 120,
-          fontSize: 44,
+          paddingPct: 0.0375,
+          barHeightPct: 0.1334,
+          fontSizePct: 0.0275,
           barColor: "#2d2d2d",
           barTextColor: "#ffffff",
           subtextColor: "#bbbbbb",
@@ -60,9 +60,9 @@ describe("Config API", () => {
       expect(res.status).toBe(200);
       expect(res.body.event.name).toBe("Sarah's Bat Mitzvah");
       expect(res.body.event.year).toBe("2026");
-      expect(res.body.frame.padding).toBe(60);
-      expect(res.body.frame.barHeight).toBe(120);
-      expect(res.body.frame.fontSize).toBe(44);
+      expect(res.body.frame.paddingPct).toBe(0.0375);
+      expect(res.body.frame.barHeightPct).toBe(0.1334);
+      expect(res.body.frame.fontSizePct).toBe(0.0275);
       expect(res.body.frame.barColor).toBe("#2d2d2d");
       expect(res.body.frame.barTextColor).toBe("#ffffff");
       expect(res.body.frame.subtextColor).toBe("#bbbbbb");
@@ -85,9 +85,9 @@ describe("Config API", () => {
       expect(res.body.event.year).toBeDefined();
 
       // Frame should use defaults
-      expect(res.body.frame.padding).toBe(40);
-      expect(res.body.frame.barHeight).toBe(100);
-      expect(res.body.frame.fontSize).toBe(36);
+      expect(res.body.frame.paddingPct).toBe(0.025);
+      expect(res.body.frame.barHeightPct).toBe(0.10);
+      expect(res.body.frame.fontSizePct).toBe(0.0225);
       expect(res.body.frame.barColor).toBe("#1e1e1e");
       expect(res.body.frame.barTextColor).toBe("#ffffff");
       expect(res.body.frame.subtextColor).toBe("#cccccc");
@@ -104,9 +104,9 @@ describe("Config API", () => {
       await request(app).put("/api/config").send({
         event: { name: "Original", year: "2024" },
         frame: {
-          padding: 80,
-          barHeight: 150,
-          fontSize: 50,
+          paddingPct: 0.05,
+          barHeightPct: 0.1667,
+          fontSizePct: 0.03125,
           barColor: "#000000",
           barTextColor: "#fff",
           subtextColor: "#ccc",
@@ -123,9 +123,9 @@ describe("Config API", () => {
       const res = await request(app).get("/api/config");
       expect(res.body.event.name).toBe("Updated Event");
       // Frame should still have previous values
-      expect(res.body.frame.padding).toBe(80);
-      expect(res.body.frame.barHeight).toBe(150);
-      expect(res.body.frame.fontSize).toBe(50);
+      expect(res.body.frame.paddingPct).toBe(0.05);
+      expect(res.body.frame.barHeightPct).toBe(0.1667);
+      expect(res.body.frame.fontSizePct).toBe(0.03125);
       expect(res.body.frame.barColor).toBe("#000000");
       // Print should still have previous values
       expect(res.body.print.paperSize).toBe("8x10in");
@@ -141,7 +141,9 @@ describe("Config API", () => {
       expect(res.body.event).toBeDefined();
       expect(res.body.frame).toBeDefined();
       expect(res.body.print).toBeDefined();
-      expect(res.body.frame.padding).toBe(40);
+      expect(res.body.frame.paddingPct).toBe(0.025);
+      expect(res.body.frame.barHeightPct).toBe(0.10);
+      expect(res.body.frame.fontSizePct).toBe(0.0225);
     });
 
     it("handles empty strings for event name and year", async () => {
@@ -169,7 +171,7 @@ describe("Config API", () => {
     it("handles undefined sections gracefully", async () => {
       const res = await request(app).put("/api/config").send({
         event: undefined,
-        frame: { padding: 10 },
+        frame: { paddingPct: 0.02 },
         print: { margin: "2mm" },
       });
       expect(res.status).toBe(200);
@@ -177,43 +179,43 @@ describe("Config API", () => {
       expect(res.body.event).toHaveProperty("name");
       expect(res.body.event).toHaveProperty("year");
       // frame should have merged padding
-      expect(res.body.frame.padding).toBe(10);
-      expect(res.body.frame.barHeight).toBe(100); // default
+      expect(res.body.frame.paddingPct).toBe(0.02);
+      expect(res.body.frame.barHeightPct).toBe(0.10); // default
       // print should have merged margin
       expect(res.body.print.margin).toBe("2mm");
       expect(res.body.print.paperSize).toBe("A4"); // default
     });
 
-    it("rejects invalid frame dimensions while preserving valid values", async () => {
+   it("rejects invalid frame dimensions while preserving valid values", async () => {
       await request(app).put("/api/config").send({
         frame: {
-          padding: 40,
-          barHeight: 500,
-          fontSize: 72,
+          paddingPct: 0.05,
+          barHeightPct: 0.15,
+          fontSizePct: 0.04,
         },
       });
 
       const res = await request(app).put("/api/config").send({
         frame: {
-          padding: -1,
-          barHeight: 1,
-          fontSize: 1,
+          paddingPct: -0.001,
+          barHeightPct: 0.01,
+          fontSizePct: 0.001,
         },
       });
 
       expect(res.status).toBe(200);
-      expect(res.body.frame.padding).toBe(40);
-      expect(res.body.frame.barHeight).toBe(500);
-      expect(res.body.frame.fontSize).toBe(72);
+      expect(res.body.frame.paddingPct).toBe(0.05);
+      expect(res.body.frame.barHeightPct).toBe(0.15);
+      expect(res.body.frame.fontSizePct).toBe(0.04);
     });
 
     it("returns all required fields for any config", async () => {
       const res = await request(app).put("/api/config").send({
         event: { name: "Full Test", year: "3000" },
         frame: {
-          padding: 40,
-          barHeight: 500,
-          fontSize: 72,
+          paddingPct: 0.025,
+          barHeightPct: 0.5556,
+          fontSizePct: 0.045,
           barColor: "#000000",
           barTextColor: "#ffffff",
           subtextColor: "#000000",
@@ -231,9 +233,9 @@ describe("Config API", () => {
 
       expect(res.body.event).toHaveProperty("name");
       expect(res.body.event).toHaveProperty("year");
-      expect(res.body.frame).toHaveProperty("padding");
-      expect(res.body.frame).toHaveProperty("barHeight");
-      expect(res.body.frame).toHaveProperty("fontSize");
+      expect(res.body.frame).toHaveProperty("paddingPct");
+      expect(res.body.frame).toHaveProperty("barHeightPct");
+      expect(res.body.frame).toHaveProperty("fontSizePct");
       expect(res.body.frame).toHaveProperty("barColor");
       expect(res.body.frame).toHaveProperty("barTextColor");
       expect(res.body.frame).toHaveProperty("subtextColor");

@@ -38,9 +38,9 @@ test("deployment config event name persists after save and reload", async ({
     data: {
       event: { name: savedName, year: "2026" },
       frame: {
-        padding: 40,
-        barHeight: 100,
-        fontSize: 36,
+        paddingPct: 0.025,
+        barHeightPct: 0.10,
+        fontSizePct: 0.0225,
         barColor: "#1e1e1e",
         barTextColor: "#ffffff",
         subtextColor: "#cccccc",

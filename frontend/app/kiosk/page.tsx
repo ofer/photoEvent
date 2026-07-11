@@ -150,7 +150,7 @@ export default function KioskPage() {
       setTimeout(() => {
         const chrome = (window as { chrome?: { printToPreview: (c: unknown, cb: (r: unknown) => void) => void } }).chrome;
         const chromeCfg = CHROME_PAPER[printConfig.paperSize];
-        if (chrome && chromeCfg) {
+        if (chrome?.printToPreview && chromeCfg) {
           const { name: chromeName, wMm, hMm } = chromeCfg;
           chrome.printToPreview({
             mediaSize: {
@@ -188,6 +188,12 @@ export default function KioskPage() {
 
   const handleGenerate = async (buttonId: string) => {
     if (!currentPhoto || generating) return;
+
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
+
     setGenerating(true);
     setGeneratingButtonId(buttonId);
     setGenError("");
@@ -205,7 +211,21 @@ export default function KioskPage() {
     } finally {
       setGenerating(false);
       setGeneratingButtonId(null);
+      countdownRef.current = COUNTDOWN_SECONDS;
+      setCountdown(countdownRef.current);
+      timerRef.current = setInterval(() => {
+        countdownRef.current -= 1;
+        setCountdown(countdownRef.current);
+        if (countdownRef.current <= 0) {
+          if (timerRef.current) clearInterval(timerRef.current);
+          timerRef.current = null;
+        }
+      }, 1000);
     }
+  };
+
+  const handleShowOriginal = () => {
+    setGeneratedImage(null);
   };
 
   const timerColor =
@@ -288,6 +308,14 @@ export default function KioskPage() {
             {/* AI generation buttons */}
             {aiConfig.buttons.length > 0 && (
               <div className="flex flex-wrap gap-3 mt-3 mb-2 justify-center">
+                {generatedImage && (
+                  <button
+                    onClick={handleShowOriginal}
+                    className="px-4 py-2 rounded-lg font-medium bg-white/10 hover:bg-white/20 text-white transition-colors"
+                  >
+                    Show Original
+                  </button>
+                )}
                 {aiConfig.buttons.map((btn) => (
                   <button
                     key={btn.id}

@@ -11,9 +11,9 @@ interface AiButtonConfig {
 interface Config {
   event: { name: string; year: string };
   frame: {
-    padding: number;
-    barHeight: number;
-    fontSize: number;
+    paddingPct: number;
+    barHeightPct: number;
+    fontSizePct: number;
     barColor: string;
     barTextColor: string;
     subtextColor: string;
@@ -34,9 +34,9 @@ const PAPER_SIZES = [
 const DEFAULT_CONFIG: Config = {
   event: { name: "PhotoEvent", year: "2026" },
   frame: {
-    padding: 40,
-    barHeight: 100,
-    fontSize: 36,
+    paddingPct: 0.025,
+    barHeightPct: 0.10,
+    fontSizePct: 0.0225,
     barColor: "#1e1e1e",
     barTextColor: "#ffffff",
     subtextColor: "#cccccc",
@@ -200,30 +200,39 @@ export default function ConfigPage() {
           <div className="p-4 sm:p-5 space-y-4">
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="block text-xs font-medium text-gray-500 mb-1">Padding (px)</label>
+                <label className="block text-xs font-medium text-gray-500 mb-1">Padding (proportional)</label>
                 <input
                   type="number"
-                  value={config.frame.padding}
-                  onChange={(e) => updateNested("frame", "padding", Number(e.target.value))}
+                  step="0.005"
+                  min="0.01"
+                  max="0.15"
+                  value={config.frame.paddingPct}
+                  onChange={(e) => updateNested("frame", "paddingPct", Number(e.target.value))}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 />
               </div>
               <div>
-                <label className="block text-xs font-medium text-gray-500 mb-1">Bar height (px)</label>
+                <label className="block text-xs font-medium text-gray-500 mb-1">Bar height (proportional)</label>
                 <input
                   type="number"
-                  value={config.frame.barHeight}
-                  onChange={(e) => updateNested("frame", "barHeight", Number(e.target.value))}
+                  step="0.01"
+                  min="0.03"
+                  max="0.30"
+                  value={config.frame.barHeightPct}
+                  onChange={(e) => updateNested("frame", "barHeightPct", Number(e.target.value))}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 />
               </div>
             </div>
             <div>
-              <label className="block text-xs font-medium text-gray-500 mb-1">Font size (px)</label>
+              <label className="block text-xs font-medium text-gray-500 mb-1">Font size (proportional)</label>
               <input
                 type="number"
-                value={config.frame.fontSize}
-                onChange={(e) => updateNested("frame", "fontSize", Number(e.target.value))}
+                step="0.0025"
+                min="0.008"
+                max="0.10"
+                value={config.frame.fontSizePct}
+                onChange={(e) => updateNested("frame", "fontSizePct", Number(e.target.value))}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               />
             </div>
@@ -251,18 +260,26 @@ export default function ConfigPage() {
               </div>
             </div>
 
-            {/* Preview */}
+           {/* Preview (scaled to 300px reference width) */}
             <div className="pt-3 border-t border-gray-100">
               <div className="text-xs font-medium text-gray-500 mb-2">Preview</div>
               <div
                 className="rounded-xl overflow-hidden shadow-sm border border-gray-100"
                 style={{
                   backgroundColor: config.frame.backgroundColor,
-                  maxHeight: "180px",
+                  width: "300px",
+                  margin: "0 auto",
                 }}
               >
                 {/* Photo placeholder area */}
-                <div className="h-28 bg-gray-50 flex items-center justify-center">
+                <div
+                  className="bg-gray-50 flex items-center justify-center"
+                  style={{
+                    height: `calc(300px * ${config.frame.barHeightPct} / 0.10)`,
+                    paddingTop: `calc(300px * ${config.frame.paddingPct})`,
+                    paddingBottom: `calc(300px * ${config.frame.paddingPct})`,
+                  }}
+                >
                   <svg
                     className="w-8 h-8 text-gray-300"
                     fill="none"
@@ -273,20 +290,23 @@ export default function ConfigPage() {
                       strokeLinecap="round"
                       strokeLinejoin="round"
                       strokeWidth={1}
-                      d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
+                      d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2 2v12a2 2 0 002 2z"
                     />
                   </svg>
                 </div>
                 {/* Frame bar */}
                 <div
-                  className="px-4 py-2 flex flex-col items-center"
-                  style={{ backgroundColor: config.frame.barColor }}
+                  className="flex flex-col items-center"
+                  style={{
+                    backgroundColor: config.frame.barColor,
+                    height: `calc(300px * ${config.frame.barHeightPct} / 0.10)`,
+                  }}
                 >
                   <span
                     className="font-bold"
                     style={{
                       color: config.frame.barTextColor,
-                      fontSize: `${config.frame.fontSize * 0.35}rem`,
+                      fontSize: `calc(1rem * ${config.frame.fontSizePct} / 0.0225)`,
                     }}
                   >
                     {config.event.name}
@@ -294,7 +314,7 @@ export default function ConfigPage() {
                   <span
                     style={{
                       color: config.frame.subtextColor,
-                      fontSize: `${(config.frame.fontSize - 8) * 0.35}rem`,
+                      fontSize: `calc(1rem * ${config.frame.fontSizePct} * 0.75 / 0.0225)`,
                     }}
                   >
                     {config.event.year}

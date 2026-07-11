@@ -296,4 +296,45 @@ describe('KioskPage - queue behavior', () => {
 
     vi.useRealTimers();
   });
-});
+
+  it('falls back to window.print() when chrome.printToPreview is unavailable', async () => {
+    vi.useFakeTimers();
+
+    // Simulate a normal Chrome browser: window.chrome exists but has no printToPreview
+    const printSpy = vi.fn();
+    Object.defineProperty(window, 'print', {
+      configurable: true,
+      writable: true,
+      value: printSpy,
+    });
+
+    render(<KioskPage />);
+
+    const photo = makePhoto('fallback-test');
+
+    await act(async () => {
+      simulateSSE(photo);
+      await Promise.resolve();
+    });
+
+    // Advance countdown to 0 (triggers print effect)
+    vi.advanceTimersByTime(30000);
+    await act(async () => { await Promise.resolve(); await Promise.resolve(); });
+
+    // Verify countdown reached 0
+    expect(screen.getByText(/\b0\b/)).toBeInTheDocument();
+
+    // Advance 300ms for the print delay setTimeout to fire
+    vi.advanceTimersByTime(300);
+    await act(async () => { await Promise.resolve(); await Promise.resolve(); });
+
+    // Should call window.print() without throwing
+    expect(printSpy).toHaveBeenCalled();
+
+    // Photo should advance to idle (no more in queue)
+    expect(screen.getByText(/Waiting for photos/i)).toBeInTheDocument();
+
+    vi.useRealTimers();
+  });
+
+ });

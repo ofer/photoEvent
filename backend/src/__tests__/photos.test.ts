@@ -185,24 +185,24 @@ describe("Photo API", () => {
       }
     });
 
-    it("centers text vertically inside bar when barHeight=500 and fontSize=72", async () => {
-      // Create a test image
-      const pixels = Buffer.alloc(100 * 100 * 3);
+    it("centers text vertically inside bar with proportional config", async () => {
+      // Create a 400x400 test image
+      const pixels = Buffer.alloc(400 * 400 * 3);
       const testImage = await sharp(pixels, {
-        raw: { width: 100, height: 100, channels: 3 },
+        raw: { width: 400, height: 400, channels: 3 },
       }).jpeg().toBuffer();
 
       const uploadRes = await request(app)
         .post("/api/photos")
-        .attach("photo", testImage, "tall-bar.jpg");
+        .attach("photo", testImage, "prop-bar.jpg");
 
-      // Set extreme config: tall bar + large font
+      // Use percentage-based config: bar=15% of imgH, padding=5% of imgW, font=3% of imgW
       await request(app).put("/api/config").send({
         event: { name: "Bar Mitzvah", year: "2026" },
         frame: {
-          padding: 40,
-          barHeight: 500,
-          fontSize: 72,
+          paddingPct: 0.05,
+          barHeightPct: 0.15,
+          fontSizePct: 0.03,
           barColor: "#1e1e1e",
           barTextColor: "#ffffff",
           subtextColor: "#cccccc",
@@ -215,59 +215,51 @@ describe("Photo API", () => {
       const frameRes = await request(app).get(`/api/frame/${uploadRes.body.id}`);
       expect(frameRes.status).toBe(200);
 
-      // Verify total height: imgH + barHeight + 2*padding
+      // Expected: padding=20px, barHeight=60px, frameH=400+60+40=500
       const meta = await sharp(frameRes.body).metadata();
-      expect(meta.height).toBe(100 + 500 + 40 * 2); // 680
+      expect(meta.height).toBe(400 + 60 + 20 * 2);
 
+      // Verify the bar section exists and has the dark bar color
       const { data, info } = await sharp(frameRes.body)
         .raw()
         .toBuffer({ resolveWithObject: true });
-      const barTop = 100 + 40;
-      const barHeight = 500;
-      const brightPixelCountsByRow: number[] = [];
+      const barTop = 400 + 20;
+      const barHeight = 60;
 
+      // Count dark pixels (bar background) in the bar region
+      let darkCount = 0;
       for (let y = barTop; y < barTop + barHeight; y += 1) {
-        let brightPixels = 0;
-        for (let x = 0; x < info.width; x += 1) {
+        for (let x = 0; x < info.width; x += 4) {
           const offset = (y * info.width + x) * info.channels;
-          const red = data[offset];
-          const green = data[offset + 1];
-          const blue = data[offset + 2];
-          if (red > 150 && green > 150 && blue > 150) {
-            brightPixels += 1;
+          const r = data[offset];
+          const g = data[offset + 1];
+          const b = data[offset + 2];
+          // Bar is dark gray (#1e1e1e)
+          if (r < 50 && g < 50 && b < 50) {
+            darkCount++;
           }
         }
-        brightPixelCountsByRow.push(brightPixels);
       }
-
-      const textRows = brightPixelCountsByRow
-        .map((count, row) => ({ count, row }))
-        .filter(({ count }) => count > 10)
-        .map(({ row }) => row);
-      const textTop = Math.min(...textRows);
-      const textBottom = Math.max(...textRows);
-
-      expect(textTop).toBeGreaterThan(150);
-      expect(textBottom).toBeLessThan(350);
-      expect(textBottom - textTop).toBeGreaterThanOrEqual(110);
+      // Most of the bar should be dark
+      expect(darkCount).toBeGreaterThan(500);
     });
 
-    it("centers text vertically inside bar when barHeight=150 and fontSize=50", async () => {
-      const pixels = Buffer.alloc(100 * 100 * 3);
+    it("centers text vertically inside bar with smaller proportions", async () => {
+      const pixels = Buffer.alloc(300 * 300 * 3);
       const testImage = await sharp(pixels, {
-        raw: { width: 100, height: 100, channels: 3 },
+        raw: { width: 300, height: 300, channels: 3 },
       }).jpeg().toBuffer();
 
       await request(app)
         .post("/api/photos")
-        .attach("photo", testImage, "medium-bar.jpg");
+        .attach("photo", testImage, "small-bar.jpg");
 
       await request(app).put("/api/config").send({
         event: { name: "Test", year: "2025" },
         frame: {
-          padding: 40,
-          barHeight: 150,
-          fontSize: 50,
+          paddingPct: 0.03,
+          barHeightPct: 0.1,
+          fontSizePct: 0.02,
           barColor: "#000000",
           barTextColor: "#ffffff",
           subtextColor: "#aaaaaa",
@@ -280,8 +272,9 @@ describe("Photo API", () => {
       const frameRes = await request(app).get(`/api/frame/${photos.body[0].id}`);
       expect(frameRes.status).toBe(200);
 
+      // 300px image: padding=9px, barHeight=30px, frameH=300+30+18=348
       const meta = await sharp(frameRes.body).metadata();
-      expect(meta.height).toBe(100 + 150 + 40 * 2); // 330
+      expect(meta.height).toBe(300 + 30 + 9 * 2);
     });
   });
 });

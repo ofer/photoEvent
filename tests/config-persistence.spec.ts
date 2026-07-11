@@ -41,9 +41,9 @@ test("config event name persists after save and page reload", async ({
     data: {
       event: { name: savedName, year: "2026" },
       frame: {
-        padding: 40,
-        barHeight: 100,
-        fontSize: 36,
+        paddingPct: 0.025,
+        barHeightPct: 0.10,
+        fontSizePct: 0.0225,
         barColor: "#1e1e1e",
         barTextColor: "#ffffff",
         subtextColor: "#cccccc",
@@ -90,9 +90,9 @@ test("config event name propagates to gallery and kiosk after save", async ({
     data: {
       event: { name: savedName, year: "2026" },
       frame: {
-        padding: 40,
-        barHeight: 100,
-        fontSize: 36,
+        paddingPct: 0.025,
+        barHeightPct: 0.10,
+        fontSizePct: 0.0225,
         barColor: "#1e1e1e",
         barTextColor: "#ffffff",
         subtextColor: "#cccccc",
@@ -135,9 +135,9 @@ test("config event name persists to kiosk preview after reload", async ({
     data: {
       event: { name: savedName, year: "2026" },
       frame: {
-        padding: 40,
-        barHeight: 100,
-        fontSize: 36,
+        paddingPct: 0.025,
+        barHeightPct: 0.10,
+        fontSizePct: 0.0225,
         barColor: "#1e1e1e",
         barTextColor: "#ffffff",
         subtextColor: "#cccccc",
@@ -184,9 +184,9 @@ test("config event name survives multiple save/reload cycles", async ({
     data: {
       event: { name: savedName, year: "2026" },
       frame: {
-        padding: 40,
-        barHeight: 100,
-        fontSize: 36,
+        paddingPct: 0.025,
+        barHeightPct: 0.10,
+        fontSizePct: 0.0225,
         barColor: "#1e1e1e",
         barTextColor: "#ffffff",
         subtextColor: "#cccccc",

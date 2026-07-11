@@ -271,9 +271,9 @@ test.describe("Config API", () => {
     expect(body).toHaveProperty("print");
     expect(body.event).toHaveProperty("name");
     expect(body.event).toHaveProperty("year");
-    expect(body.frame).toHaveProperty("padding");
-    expect(body.frame).toHaveProperty("barHeight");
-    expect(body.frame).toHaveProperty("fontSize");
+    expect(body.frame).toHaveProperty("paddingPct");
+    expect(body.frame).toHaveProperty("barHeightPct");
+    expect(body.frame).toHaveProperty("fontSizePct");
     expect(body.frame.barColor).toMatch(/^#[0-9a-f]{6}$/i);
     expect(body.frame.barTextColor).toMatch(/^#[0-9a-f]{6}$/i);
     expect(body.frame.subtextColor).toMatch(/^#[0-9a-f]{6}$/i);
@@ -283,9 +283,9 @@ test.describe("Config API", () => {
     expect(body.print).toHaveProperty("margin");
     expect(body.event.name).toBe("PhotoEvent");
     expect(body.event.year).toBe("2026");
-    expect(body.frame.padding).toBe(40);
-    expect(body.frame.barHeight).toBe(100);
-    expect(body.frame.fontSize).toBe(36);
+    expect(body.frame.paddingPct).toBe(0.025);
+    expect(body.frame.barHeightPct).toBe(0.10);
+    expect(body.frame.fontSizePct).toBe(0.0225);
     expect(body.print.paperSize).toBe("A4");
     expect(body.print.orientation).toBe("landscape");
     expect(body.print.margin).toBe("10mm");
@@ -297,9 +297,9 @@ test.describe("Config API", () => {
     const updatedConfig = {
       event: { name: "E2E Test Event", year: "2027" },
       frame: {
-        padding: 50,
-        barHeight: 120,
-        fontSize: 40,
+        paddingPct: 0.03,
+        barHeightPct: 0.12,
+        fontSizePct: 0.025,
         barColor: "#ff0000",
         barTextColor: "#00ff00",
         subtextColor: "#0000ff",
@@ -318,9 +318,9 @@ test.describe("Config API", () => {
     const body = await getRes.json();
     expect(body.event.name).toBe("E2E Test Event");
     expect(body.event.year).toBe("2027");
-    expect(body.frame.padding).toBe(50);
-    expect(body.frame.barHeight).toBe(120);
-    expect(body.frame.fontSize).toBe(40);
+    expect(body.frame.paddingPct).toBe(0.03);
+    expect(body.frame.barHeightPct).toBe(0.12);
+    expect(body.frame.fontSizePct).toBe(0.025);
     expect(body.frame.barColor).toBe("#ff0000");
     expect(body.frame.barTextColor).toBe("#00ff00");
     expect(body.frame.subtextColor).toBe("#0000ff");
@@ -335,9 +335,9 @@ test.describe("Config API", () => {
       data: {
         event: { name: "Full Config", year: "2025" },
         frame: {
-          padding: 80,
-          barHeight: 200,
-          fontSize: 50,
+          paddingPct: 0.04,
+          barHeightPct: 0.15,
+          fontSizePct: 0.03,
           barColor: "#111111",
           barTextColor: "#222222",
           subtextColor: "#333333",
@@ -356,7 +356,7 @@ test.describe("Config API", () => {
     const body = await getRes.json();
     expect(body.event.name).toBe("Partial Update");
     expect(body.event.year).toBe("2025");
-    expect(body.frame.padding).toBe(80);
+    expect(body.frame.paddingPct).toBe(0.04);
     expect(body.print.paperSize).toBe("8x10in");
   });
 
@@ -450,26 +450,26 @@ test.describe("Config Page", () => {
   }) => {
     await page.goto("/config", { waitUntil: "domcontentloaded" });
 
-    const paddingInput = page.locator("label:has-text('Padding (px)')").locator("..").locator("input");
+    const paddingInput = page.locator("label:has-text('Padding (proportional)')").locator("..").locator("input");
     await paddingInput.clear();
-    await paddingInput.fill("60");
+    await paddingInput.fill("0.03");
 
-    const barHeightInput = page.locator("label:has-text('Bar height (px)')").locator("..").locator("input");
+    const barHeightInput = page.locator("label:has-text('Bar height (proportional)')").locator("..").locator("input");
     await barHeightInput.clear();
-    await barHeightInput.fill("150");
+    await barHeightInput.fill("0.12");
 
-    const fontSizeInput = page.locator("label:has-text('Font size (px)')").locator("..").locator("input");
+    const fontSizeInput = page.locator("label:has-text('Font size (proportional)')").locator("..").locator("input");
     await fontSizeInput.clear();
-    await fontSizeInput.fill("48");
+    await fontSizeInput.fill("0.025");
 
     await page.locator("button:has-text('Save')").click();
     await expect(page.locator("text=Saved!")).toBeVisible({ timeout: 5000 });
 
     const res = await request.get("/api/config");
     const body = await res.json();
-    expect(body.frame.padding).toBe(60);
-    expect(body.frame.barHeight).toBe(150);
-    expect(body.frame.fontSize).toBe(48);
+    expect(body.frame.paddingPct).toBe(0.03);
+    expect(body.frame.barHeightPct).toBe(0.12);
+    expect(body.frame.fontSizePct).toBe(0.025);
   });
 
   test("config page paper size changes orientation", async ({ page, request }) => {

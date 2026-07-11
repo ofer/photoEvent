@@ -19,6 +19,7 @@ export default function GalleryPage() {
   });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [selectedIdx, setSelectedIdx] = useState<number | null>(null);
   const prevPhotosRef = useRef<string[]>([]);
 
   const fetchPhotos = useCallback(async () => {
@@ -77,13 +78,39 @@ export default function GalleryPage() {
     const prevIds = new Set(prevPhotosRef.current);
     const newPhotos = photos.filter((p) => !prevIds.has(p.id));
     prevPhotosRef.current = photos.map((p) => p.id);
-
-    // Store new photo IDs for animation (simple approach: use a ref)
-    if (newPhotos.length > 0) {
-      // We use a CSS class based on photo index for first render
-      // This is handled via a key + simple animation
-    }
   }, [photos]);
+
+  useEffect(() => {
+    const handleKey = (e: globalThis.KeyboardEvent) => {
+      if (e.key === "Escape" && selectedIdx !== null) setSelectedIdx(null);
+    };
+    window.addEventListener("keydown", handleKey);
+    return () => window.removeEventListener("keydown", handleKey);
+  }, [selectedIdx]);
+
+  useEffect(() => {
+    if (selectedIdx !== null) {
+      document.body.style.overflow = "hidden";
+    } else {
+      document.body.style.overflow = "";
+    }
+    return () => {
+      document.body.style.overflow = "";
+    };
+  }, [selectedIdx]);
+
+  const openViewer = (index: number) => setSelectedIdx(index);
+  const closeViewer = () => setSelectedIdx(null);
+
+  const goTo = (delta: number) => {
+    if (selectedIdx === null) return;
+    const next = selectedIdx + delta;
+    if (next >= 0 && next < photos.length) {
+      setSelectedIdx(next);
+    }
+  };
+
+  const selectedPhoto = selectedIdx !== null ? photos[selectedIdx] : null;
 
   return (
     <main className="min-h-screen bg-white">
@@ -153,16 +180,16 @@ export default function GalleryPage() {
         ) : (
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
             {photos.map((photo, index) => (
-              <a
+              <button
                 key={photo.id}
-                href={photo.url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className={`group block aspect-square rounded-lg overflow-hidden bg-gray-100 shadow-sm hover:shadow-md transition-all duration-200 ${
+                type="button"
+                onClick={() => openViewer(index)}
+                className={`group block aspect-square rounded-lg overflow-hidden bg-gray-100 shadow-sm hover:shadow-md transition-all duration-200 text-left ${
                   index === 0 && photos.length > prevPhotosRef.current.length
                     ? "photo-enter"
                     : ""
                 }`}
+                aria-label={`View ${photo.name}`}
               >
                 <img
                   src={photo.thumb}
@@ -175,11 +202,69 @@ export default function GalleryPage() {
                     {formatDate(photo.timestamp)}
                   </span>
                 </div>
-              </a>
+              </button>
             ))}
           </div>
         )}
       </div>
+
+      {selectedPhoto && (
+        <div
+          tabIndex={-1}
+          role="dialog"
+          aria-modal="true"
+          aria-label="Photo viewer"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/90"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) closeViewer();
+          }}
+        >
+          <button
+            type="button"
+            onClick={closeViewer}
+            className="absolute top-4 right-4 z-10 p-2 rounded-full bg-white/10 text-white hover:bg-white/20 transition-colors"
+            aria-label="Close viewer"
+          >
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+
+          <div className="absolute top-4 left-4 z-10 text-white/80 text-sm font-medium">
+            {selectedIdx !== null ? selectedIdx + 1 : 0} / {photos.length}
+          </div>
+
+          <button
+            type="button"
+            onClick={() => goTo(-1)}
+            disabled={selectedIdx === 0}
+            className="absolute left-4 z-10 p-2 rounded-full bg-white/10 text-white hover:bg-white/20 disabled:opacity-30 disabled:cursor-default transition-colors"
+            aria-label="Previous photo"
+          >
+            <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+            </svg>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => goTo(1)}
+            disabled={selectedIdx === photos.length - 1}
+            className="absolute right-4 z-10 p-2 rounded-full bg-white/10 text-white hover:bg-white/20 disabled:opacity-30 disabled:cursor-default transition-colors"
+            aria-label="Next photo"
+          >
+            <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+            </svg>
+          </button>
+
+          <img
+            src={selectedPhoto.url}
+            alt={selectedPhoto.name}
+            className="max-h-[90vh] max-w-[90vw] object-contain rounded-lg"
+          />
+        </div>
+      )}
     </main>
   );
 }

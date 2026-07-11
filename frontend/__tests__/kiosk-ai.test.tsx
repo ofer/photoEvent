@@ -466,8 +466,10 @@ describe('KioskPage - AI generation', () => {
     expect(screen.getByText(/ComfyUI connection refused/)).toBeInTheDocument();
   });
 
-  it('keeps countdown running during generation', async () => {
+  it('pauses countdown during AI generation and resets after completion', async () => {
     vi.useFakeTimers();
+    let fetchResolve: ((value: Response) => void) | null = null;
+
     mockFetch.mockImplementation((url: string) => {
       if (url === '/api/config') {
         return Promise.resolve({
@@ -480,9 +482,7 @@ describe('KioskPage - AI generation', () => {
         });
       }
       if (url === '/api/ai/generate') {
-        return new Promise((resolve) =>
-          setTimeout(() => resolve({ ok: true, json: () => Promise.resolve({ imageUrl: 'data:image/png;base64,x' }) }), 5000),
-        );
+        return new Promise((resolve) => { fetchResolve = resolve as any; });
       }
       return Promise.resolve({ ok: false });
     });
@@ -494,6 +494,9 @@ describe('KioskPage - AI generation', () => {
       await Promise.resolve();
     });
 
+    const initialCountdown = screen.getByText(/\b30\b/);
+    expect(initialCountdown).toBeInTheDocument();
+
     await act(async () => {
       fireEvent.click(screen.getByText('Cartoon'));
       await Promise.resolve();
@@ -501,9 +504,19 @@ describe('KioskPage - AI generation', () => {
 
     vi.advanceTimersByTime(15000);
     await act(async () => { await Promise.resolve(); });
+    const pausedCountdown = screen.getByText(/\b30\b/);
+    expect(pausedCountdown).toBeInTheDocument();
 
-    const countdownValues = screen.getAllByText(/\b\d+\b/);
-    expect(parseInt(countdownValues[0].textContent || '30', 10)).toBe(15);
+    const mockResponse = { ok: true, json: () => Promise.resolve({ imageUrl: 'data:image/png;base64,x' }) };
+    await act(async () => { fetchResolve?.(mockResponse as any); await Promise.resolve(); });
+
+    const freshCountdown = screen.getByText(/\b30\b/);
+    expect(freshCountdown).toBeInTheDocument();
+
+    vi.advanceTimersByTime(1000);
+    await act(async () => { await Promise.resolve(); });
+    const tickingCountdown = screen.getByText(/\b29\b/);
+    expect(tickingCountdown).toBeInTheDocument();
 
     vi.useRealTimers();
   });
@@ -642,5 +655,86 @@ describe('KioskPage - AI generation', () => {
     expect(screen.queryByText(/Waiting for photos/i)).toBeInTheDocument();
     // AI buttons should not be visible without a photo
     expect(screen.queryByText('Cartoon')).not.toBeInTheDocument();
+  });
+
+  it('shows "Show Original" button after successful AI generation', async () => {
+    mockFetch.mockImplementation((url: string) => {
+      if (url === '/api/config') {
+        return Promise.resolve({
+          json: () => Promise.resolve({
+            print: { paperSize: 'A4' },
+            ai: {
+              buttons: [{ id: 'cartoon', label: 'Cartoon', workflowJson: '{"1":{}}' }],
+            },
+          }),
+        });
+      }
+      if (url === '/api/ai/generate') {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ imageUrl: 'data:image/png;base64,generated' }),
+        });
+      }
+      return Promise.resolve({ ok: false });
+    });
+
+    render(<KioskPage />);
+
+    await act(async () => {
+      simulateSSE(makePhoto('ai-test'));
+      await Promise.resolve();
+    });
+
+    expect(screen.queryByText('Show Original')).not.toBeInTheDocument();
+
+    await act(async () => {
+      fireEvent.click(screen.getByText('Cartoon'));
+      await Promise.resolve();
+    });
+
+    expect(screen.getByText('Show Original')).toBeInTheDocument();
+  });
+
+  it('resets to original image when "Show Original" is clicked', async () => {
+    mockFetch.mockImplementation((url: string) => {
+      if (url === '/api/config') {
+        return Promise.resolve({
+          json: () => Promise.resolve({
+            print: { paperSize: 'A4' },
+            ai: {
+              buttons: [{ id: 'cartoon', label: 'Cartoon', workflowJson: '{"1":{}}' }],
+            },
+          }),
+        });
+      }
+      if (url === '/api/ai/generate') {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ imageUrl: 'data:image/png;base64,generated' }),
+        });
+      }
+      return Promise.resolve({ ok: false });
+    });
+
+    render(<KioskPage />);
+
+    await act(async () => {
+      simulateSSE(makePhoto('ai-test'));
+      await Promise.resolve();
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByText('Cartoon'));
+      await Promise.resolve();
+    });
+
+    expect(screen.getByRole('img')).toHaveAttribute('src', 'data:image/png;base64,generated');
+
+    await act(async () => {
+      fireEvent.click(screen.getByText('Show Original'));
+      await Promise.resolve();
+    });
+
+    expect(screen.getByRole('img')).toHaveAttribute('src', '/api/frame/ai-test.jpg');
   });
 });
