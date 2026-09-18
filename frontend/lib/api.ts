@@ -9,9 +9,16 @@ export async function getPhotos() {
   return res.json();
 }
 
-export async function uploadPhoto(file: File) {
+/**
+ * Upload a photo to the kiosk. When the review screen is showing a
+ * transformed preview, pass the applied AI button id in `aiButton`;
+ * the original photo bytes are always what gets uploaded (the kiosk
+ * re-applies the transform from the server-side cache).
+ */
+export async function uploadPhoto(file: File, aiButton?: string | null) {
   const formData = new FormData();
   formData.append("photo", file);
+  if (aiButton) formData.append("aiButton", aiButton);
 
   const res = await fetch(`/api/photos`, {
     method: "POST",

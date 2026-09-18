@@ -4,61 +4,137 @@ import * as path from "path";
 
 const FIXTURES_DIR = path.join(__dirname, "fixtures");
 
+/**
+ * Wait until React has hydrated the client component and attached its event
+ * handlers. `setInputFiles` dispatches a native `change` event; if it fires
+ * before hydration, React hasn't subscribed yet and the event is silently
+ * dropped (the review screen never appears). Polling for the React fiber
+ * property on the element is a deterministic, fast hydration signal.
+ */
+async function waitForReactReady(page: import("@playwright/test").Page, selector: string) {
+  await page.waitForFunction(
+    (sel: string) => {
+      const el = document.querySelector(sel);
+      return (
+        !!el &&
+        Object.keys(el).some((k) =>
+          k.startsWith("__reactFiber$") || k.startsWith("__reactContainer$")
+        )
+      );
+    },
+    selector,
+    { timeout: 10_000 }
+  );
+}
+
 test.describe("Photo Upload Flow", () => {
   test("capture page shows camera button", async ({ page }) => {
     await page.goto("/capture", { waitUntil: "domcontentloaded" });
 
-    const cameraButton = page.locator('input[type="file"][capture="environment"]');
-    await expect(cameraButton).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: "Take a photo" })
+    ).toBeVisible();
 
     await expect(page.locator("text=Uploading")).not.toBeVisible();
-    await expect(page.locator("text=Photo uploaded")).not.toBeVisible();
+    await expect(page.locator("text=Photo sent to kiosk")).not.toBeVisible();
   });
 
-  test("upload succeeds and shows success message", async ({ page, request }) => {
-    await page.goto("/capture", { waitUntil: "domcontentloaded" });
-
+  test("capture → preview → accept → photo in gallery and kiosk queue", async ({
+    page,
+    context,
+  }) => {
     const testImagePath = path.join(FIXTURES_DIR, "e2e-test.jpg");
     const jpegData = fs.readFileSync(testImagePath);
 
-    const uploadResponse = await request.post("/api/photos", {
-      multipart: {
-        photo: {
-          name: "e2e-test.jpg",
-          mimeType: "image/jpeg",
-          buffer: jpegData,
-        },
-      },
+    // Watch the kiosk before the capture happens
+    const kiosk = await context.newPage();
+    await kiosk.goto("/kiosk", { waitUntil: "domcontentloaded" });
+    await expect(kiosk.locator("text=Waiting for photos")).toBeVisible({
+      timeout: 15_000,
     });
 
-    expect(uploadResponse.ok()).toBe(true);
-    const photo = await uploadResponse.json();
-    expect(photo.id).toBeDefined();
+    await page.goto("/capture", { waitUntil: "domcontentloaded" });
+    await waitForReactReady(
+      page,
+      'input[type="file"][capture="environment"]'
+    );
 
+    let photoUploads = 0;
+    page.on("request", (req) => {
+      if (req.method() === "POST" && req.url().includes("/api/photos")) {
+        photoUploads += 1;
+      }
+    });
+
+    const input = page.locator('input[type="file"][capture="environment"]');
+    await input.setInputFiles({
+      name: "e2e-capture.jpg",
+      mimeType: "image/jpeg",
+      buffer: jpegData,
+    });
+
+    // Full-screen preview of exactly that photo appears
+    await expect(page.locator("img[alt='Photo preview']")).toBeVisible({
+      timeout: 10_000,
+    });
+
+    // Nothing was uploaded before Accept
+    expect(photoUploads).toBe(0);
+    await expect(kiosk.locator("button:has-text('Discard')")).not.toBeVisible();
+
+    // Accept uploads it and shows success
+    await page.locator("button:has-text('Accept')").click();
+    await expect(page.locator("text=Photo sent to kiosk")).toBeVisible({
+      timeout: 15_000,
+    });
+    expect(photoUploads).toBe(1);
+
+    // Photo enters the kiosk queue with a countdown
+    await expect(kiosk.locator("button:has-text('Discard')")).toBeVisible({
+      timeout: 15_000,
+    });
+    await expect(kiosk.locator(".kiosk-print-area img")).toBeVisible({
+      timeout: 15_000,
+    });
+
+    // Capture page returns to idle after ~3s
+    await expect(page.locator("text=Photo sent to kiosk")).toBeHidden({
+      timeout: 15_000,
+    });
+
+    // And the photo is in the gallery
     await page.goto("/gallery", { waitUntil: "domcontentloaded" });
-
-    await page.waitForTimeout(1000);
-
-    const thumbnails = page.locator("img[src*='thumb_']");
-    await expect(thumbnails.first()).toBeVisible();
+    await expect(page.locator("img[src*='thumb_']").first()).toBeVisible({
+      timeout: 15_000,
+    });
   });
 
-  test("rejects non-image upload with user-friendly error", async ({ request }) => {
-    const uploadResponse = await request.post("/api/photos", {
-      multipart: {
-        photo: {
-          name: "not-an-image.txt",
-          mimeType: "text/plain",
-          buffer: Buffer.from("not an image"),
-        },
-      },
+  test("non-image upload fails with a user-friendly error and offers retry", async ({
+    page,
+  }) => {
+    await page.goto("/capture", { waitUntil: "domcontentloaded" });
+    await waitForReactReady(
+      page,
+      'input[type="file"][capture="environment"]'
+    );
+
+    const input = page.locator('input[type="file"][capture="environment"]');
+    await input.setInputFiles({
+      name: "not-an-image.txt",
+      mimeType: "text/plain",
+      buffer: Buffer.from("not an image"),
     });
 
-    expect(uploadResponse.status()).toBe(400);
-    const body = await uploadResponse.json();
-    expect(body.error).toBeDefined();
-    expect(body.error).not.toContain("Error:");
-    expect(body.error).not.toContain("at ");
+    await expect(page.locator("img[alt='Photo preview']")).toBeVisible({
+      timeout: 10_000,
+    });
+
+    await page.locator("button:has-text('Accept')").click();
+
+    const errorText = page.locator("text=Only image files are allowed");
+    await expect(errorText).toBeVisible({ timeout: 15_000 });
+    await expect(page.locator("button:has-text('Retry')")).toBeVisible();
+    await expect(page.locator("button:has-text('Discard')")).toBeVisible();
   });
 
   test("rejects oversized upload", async ({ request }) => {
