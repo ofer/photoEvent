@@ -1,11 +1,32 @@
-import { describe, it, expect, beforeEach, afterAll } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, afterAll, vi } from "vitest";
 import request from "supertest";
 import app from "../index";
 import fs from "fs";
 import path from "path";
 import sharp from "sharp";
+import { notifyNewPhoto } from "../sse";
+
+// Spy on notifyNewPhoto while keeping the rest of the sse module real
+// (subscribe/getSSEHandler). Required for the SSE-payload describe block
+// below; harmless to the other tests (NODE_ENV=test skips the call there).
+vi.mock("../sse", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../sse")>();
+  return {
+    ...actual,
+    notifyNewPhoto: vi.fn(),
+  };
+});
 
 const STORAGE_DIR = path.resolve(__dirname, "../../storage");
+
+function makeTestImage(): Buffer {
+  const testImage = Buffer.alloc(1024 * 100, 0xff);
+  // JPEG magic bytes
+  testImage[0] = 0xff;
+  testImage[1] = 0xd8;
+  testImage[2] = 0xff;
+  return testImage;
+}
 
 describe("Photo API", () => {
   beforeEach(() => {
@@ -43,6 +64,32 @@ describe("Photo API", () => {
       expect(res.body).toHaveProperty("url");
       expect(res.body).toHaveProperty("thumb");
       expect(res.body).toHaveProperty("timestamp");
+    });
+
+    it("returns 201 with aiButton set when the field is present", async () => {
+      const res = await request(app)
+        .post("/api/photos")
+        .attach("photo", makeTestImage(), "ai-button.jpg")
+        .field("aiButton", "cartoon");
+      expect(res.status).toBe(201);
+      expect(res.body.aiButton).toBe("cartoon");
+    });
+
+    it("returns aiButton null when the field is absent", async () => {
+      const res = await request(app)
+        .post("/api/photos")
+        .attach("photo", makeTestImage(), "no-ai-button.jpg");
+      expect(res.status).toBe(201);
+      expect(res.body.aiButton).toBeNull();
+    });
+
+    it("returns aiButton null when the field is an empty string", async () => {
+      const res = await request(app)
+        .post("/api/photos")
+        .attach("photo", makeTestImage(), "empty-ai-button.jpg")
+        .field("aiButton", "");
+      expect(res.status).toBe(201);
+      expect(res.body.aiButton).toBeNull();
     });
   });
 
@@ -276,5 +323,46 @@ describe("Photo API", () => {
       const meta = await sharp(frameRes.body).metadata();
       expect(meta.height).toBe(300 + 30 + 9 * 2);
     });
+  });
+});
+
+// photos.ts intentionally skips notifyNewPhoto when NODE_ENV=test (npm test
+// sets it), so a live SSE subscriber would receive nothing here. We assert
+// the SSE payload against the module spy instead, flipping NODE_ENV for the
+// duration of this block so the real call path runs. The app.listen guard in
+// index.ts is evaluated at import time, so no server starts as a side effect.
+describe("SSE notifyNewPhoto payload (mocked ../sse)", () => {
+  const originalNodeEnv = process.env.NODE_ENV;
+
+  beforeEach(() => {
+    process.env.NODE_ENV = "development";
+    vi.mocked(notifyNewPhoto).mockClear();
+  });
+
+  afterEach(() => {
+    process.env.NODE_ENV = originalNodeEnv;
+  });
+
+  it("carries aiButton in the SSE payload when the field is present", async () => {
+    const res = await request(app)
+      .post("/api/photos")
+      .attach("photo", makeTestImage(), "sse-ai-button.jpg")
+      .field("aiButton", "cartoon");
+    expect(res.status).toBe(201);
+    expect(notifyNewPhoto).toHaveBeenCalledTimes(1);
+    expect(notifyNewPhoto).toHaveBeenCalledWith(
+      expect.objectContaining({ aiButton: "cartoon" })
+    );
+  });
+
+  it("carries aiButton null in the SSE payload when the field is absent", async () => {
+    const res = await request(app)
+      .post("/api/photos")
+      .attach("photo", makeTestImage(), "sse-no-ai-button.jpg");
+    expect(res.status).toBe(201);
+    expect(notifyNewPhoto).toHaveBeenCalledTimes(1);
+    expect(notifyNewPhoto).toHaveBeenCalledWith(
+      expect.objectContaining({ aiButton: null })
+    );
   });
 });

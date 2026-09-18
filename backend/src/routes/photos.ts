@@ -54,6 +54,13 @@ router.post("/", upload.single("photo"), async (req: Request, res: Response) => 
   const filePath = path.join(STORAGE_DIR, filename);
   const originalName = req.file.originalname;
 
+  // Optional AI transformation choice from the phone's review screen.
+  // No validation against the AI config here — a stale/unknown id degrades
+  // gracefully at the kiosk later (original photo shown).
+  const rawAiButton =
+    typeof req.body.aiButton === "string" ? req.body.aiButton.trim() : "";
+  const aiButton: string | null = rawAiButton.length > 0 ? rawAiButton : null;
+
   // Wait for multer to finish writing the file before proceeding.
   // Multer's diskStorage streams the file, and next() may be called
   // before the OS has fully flushed the data to disk. If we send the
@@ -82,6 +89,7 @@ router.post("/", upload.single("photo"), async (req: Request, res: Response) => 
     timestamp: new Date().toISOString(),
     url: `/api/photos/${filename}`,
     thumb: `/api/photos/thumb_${filename}`,
+    aiButton,
   };
 
   // Generate thumbnail asynchronously — don't block the response

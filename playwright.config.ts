@@ -2,7 +2,7 @@ import { defineConfig, devices } from "@playwright/test";
 
 export default defineConfig({
   testDir: "./tests",
-  testMatch: ["**/e2e.spec.ts", "**/config-persistence.spec.ts", "**/deployment-config-persistence.spec.ts", "**/kiosk.spec.ts"],
+  testMatch: ["**/e2e.spec.ts", "**/config-persistence.spec.ts", "**/deployment-config-persistence.spec.ts", "**/kiosk.spec.ts", "**/capture-ai.spec.ts", "**/kiosk-choice.spec.ts"],
   timeout: 60_000,
   expect: {
     timeout: 10_000,

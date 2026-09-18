@@ -1,5 +1,8 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import request from "supertest";
+import fs from "fs";
+import os from "os";
+import path from "path";
 import app from "../index";
 import type { AiConfig, AiButtonConfig } from "../routes/config";
 
@@ -35,14 +38,22 @@ function mockConfig(ai: AiConfig): void {
   });
 }
 
+let aiCacheDir: string;
+
 describe("AI Route", () => {
   beforeEach(() => {
     mockConfig({ comfyServerUrl: "http://test:8188", buttons: [] });
+    // Hermetic cache: keep the transform cache out of real storage so repeated
+    // runs cannot hit persisted entries and skip the ComfyUI fetch sequence.
+    aiCacheDir = fs.mkdtempSync(path.join(os.tmpdir(), "ai-cache-"));
+    process.env.AI_CACHE_DIR = aiCacheDir;
   });
 
   afterEach(() => {
     vi.restoreAllMocks();
     mockLoadConfig.mockReset();
+    fs.rmSync(aiCacheDir, { recursive: true, force: true });
+    delete process.env.AI_CACHE_DIR;
   });
 
   // ── Validation tests (fail fast, no fetch needed) ─────────────────

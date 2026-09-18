@@ -28,6 +28,7 @@ export function notifyNewPhoto(photo: {
   timestamp: string;
   url: string;
   thumb: string;
+  aiButton: string | null;
 }) {
   console.log(`[SSE] Notifying ${subscribers.length} subscribers:`, photo.id);
   const data = JSON.stringify(photo);
