@@ -4,6 +4,28 @@ import * as path from "path";
 
 const FIXTURES_DIR = path.join(__dirname, "fixtures");
 
+const DEFAULT_CONFIG = {
+  event: { name: "PhotoEvent", year: "2026" },
+  frame: {
+    paddingPct: 0.025,
+    barHeightPct: 0.1,
+    fontSizePct: 0.0225,
+    barColor: "#1e1e1e",
+    barTextColor: "#ffffff",
+    subtextColor: "#cccccc",
+    backgroundColor: "#ffffff",
+  },
+  print: { paperSize: "A4", orientation: "landscape", margin: "10mm" },
+  ai: { comfyServerUrl: "http://10.0.0.17:8188", buttons: [] },
+};
+
+async function resetConfig(
+  request: import("@playwright/test").APIRequestContext
+) {
+  const response = await request.put("/api/config", { data: DEFAULT_CONFIG });
+  expect(response.status()).toBe(200);
+}
+
 /**
  * Wait until React has hydrated the client component and attached its event
  * handlers. `setInputFiles` dispatches a native `change` event; if it fires
@@ -179,8 +201,8 @@ test.describe("Gallery Flow", () => {
     const thumbnails = page.locator("img[src*='thumb_']");
     await expect(thumbnails.first()).toBeVisible();
 
-    const photoLinks = page.locator("a[href*='/api/photos/']");
-    await expect(photoLinks.first()).toBeVisible();
+    const photoButton = thumbnails.first().locator("..");
+    await expect(photoButton).toHaveAttribute("aria-label", /^View .+\.jpg$/);
   });
 
   test("gallery shows empty state with no photos", async ({ page }) => {
@@ -191,7 +213,8 @@ test.describe("Gallery Flow", () => {
     await expect(page.locator("main")).toBeVisible();
   });
 
-  test("gallery loads event name from config", async ({ page }) => {
+  test("gallery loads event name from config", async ({ page, request }) => {
+    await resetConfig(request);
     await page.goto("/gallery", { waitUntil: "domcontentloaded" });
 
     await expect(page.locator("text=PhotoEvent")).toBeVisible({
@@ -226,7 +249,8 @@ test.describe("Gallery Flow", () => {
 });
 
 test.describe("QR Code Page", () => {
-  test("qr page displays QR code", async ({ page }) => {
+  test("qr page displays QR code", async ({ page, request }) => {
+    await resetConfig(request);
     await page.goto("/qr", { waitUntil: "domcontentloaded" });
 
     const qrImage = page.locator("img[alt='Scan to capture photos']");
@@ -339,8 +363,9 @@ test.describe("Navigation", () => {
 
 test.describe("Config API", () => {
   test("GET /api/config returns default config structure", async ({ request }) => {
+    await resetConfig(request);
     const res = await request.get("/api/config");
-    expect(res.status).toBe(200);
+    expect(res.status()).toBe(200);
     const body = await res.json();
     expect(body).toHaveProperty("event");
     expect(body).toHaveProperty("frame");
@@ -387,10 +412,10 @@ test.describe("Config API", () => {
     const saveRes = await request.put("/api/config", {
       data: updatedConfig,
     });
-    expect(saveRes.status).toBe(200);
+    expect(saveRes.status()).toBe(200);
 
     const getRes = await request.get("/api/config");
-    expect(getRes.status).toBe(200);
+    expect(getRes.status()).toBe(200);
     const body = await getRes.json();
     expect(body.event.name).toBe("E2E Test Event");
     expect(body.event.year).toBe("2027");
@@ -426,7 +451,7 @@ test.describe("Config API", () => {
     const partialRes = await request.put("/api/config", {
       data: { event: { name: "Partial Update" } },
     });
-    expect(partialRes.status).toBe(200);
+    expect(partialRes.status()).toBe(200);
 
     const getRes = await request.get("/api/config");
     const body = await getRes.json();
@@ -442,46 +467,44 @@ test.describe("Config API", () => {
     });
 
     const eventRes = await request.get("/api/event");
-    expect(eventRes.status).toBe(200);
+    expect(eventRes.status()).toBe(200);
     const body = await eventRes.json();
     expect(body.name).toBe("Reflected Event");
     expect(body.year).toBe("2030");
   });
 
-  test("PUT /api/config with empty body preserves defaults", async ({
+  test("PUT /api/config with empty body preserves current config", async ({
     request,
   }) => {
+    await resetConfig(request);
+    const before = await (await request.get("/api/config")).json();
+
     const res = await request.put("/api/config", { data: {} });
-    expect(res.status).toBe(200);
-    const body = await res.json();
-    expect(body.event).toBeDefined();
-    expect(body.frame).toBeDefined();
-    expect(body.print).toBeDefined();
-    expect(body.frame.padding).toBe(40);
+    expect(res.status()).toBe(200);
+    expect(await res.json()).toEqual(before);
   });
 });
 
 test.describe("Config Page", () => {
-  test("config page loads and shows default values", async ({ page }) => {
+  test("config page loads and shows default values", async ({ page, request }) => {
+    await resetConfig(request);
     await page.goto("/config", { waitUntil: "domcontentloaded" });
 
     await expect(page.locator("text=Configuration")).toBeVisible({
       timeout: 5000,
     });
 
-    await expect(page.locator("text=Event")).toBeVisible();
-    await expect(page.locator("label:has-text('Event name')")).toBeVisible();
-    await expect(page.locator("label:has-text('Year')")).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Event", exact: true })).toBeVisible();
+    await expect(page.getByText("Event name", { exact: true })).toBeVisible();
+    await expect(page.getByText("Year", { exact: true })).toBeVisible();
 
-    await expect(page.locator("text=Frame")).toBeVisible();
-    await expect(page.locator("label:has-text('Padding (px)')")).toBeVisible();
-    await expect(
-      page.locator("label:has-text('Bar height (px)')")
-    ).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Frame", exact: true })).toBeVisible();
+    await expect(page.getByText("Padding (proportional)", { exact: true })).toBeVisible();
+    await expect(page.getByText("Bar height (proportional)", { exact: true })).toBeVisible();
 
-    await expect(page.locator("text=Print")).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Print", exact: true })).toBeVisible();
 
-    await expect(page.locator("text=Save")).toBeVisible();
+    await expect(page.getByRole("button", { name: "Save", exact: true })).toBeVisible();
   });
 
   test("config page event name input reflects saved config", async ({
@@ -573,7 +596,9 @@ test.describe("Config Page", () => {
 
     await page.goto("/config", { waitUntil: "domcontentloaded" });
 
-    const previewBar = page.locator("div:has-text('My Unique Event')");
-    await expect(previewBar).toBeVisible({ timeout: 5000 });
+    const preview = page.getByText("Preview", { exact: true }).locator("..");
+    await expect(
+      preview.getByText("My Unique Event", { exact: true })
+    ).toBeVisible({ timeout: 5000 });
   });
 });

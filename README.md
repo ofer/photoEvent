@@ -6,7 +6,7 @@ A web app for live photo capture and printing at events (bar mitzvah, wedding, e
 
 ## Features
 
-- **Photo capture** — mobile-optimized page using the device camera, auto-uploads to server
+- **Photo capture** — mobile-optimized page using the device camera. After taking a photo you get a full-screen **review** (before anything is uploaded), can apply the **AI transformation buttons**, then **Accept** — which uploads the original photo plus your chosen transformation (or none). Retake and discard are available at review; nothing is uploaded or printed until you accept
 - **Live gallery** — responsive grid with real-time updates via Server-Sent Events
 - **QR code** — large scannable code linking to the capture page, displayed at the event
 - **Kiosk mode** — unattended automatic printing with a 30-second countdown and discard option
@@ -127,7 +127,19 @@ docker compose -f deployment/docker-compose.yml exec backend rm -f /app/storage/
 
 ## AI Generation Buttons
 
-The kiosk supports configurable AI generation buttons. Each button triggers a ComfyUI workflow that receives the raw uploaded photo (without the event frame) and returns a generated result for printing. Generated results are then processed by the kiosk like any other photo and can be framed and printed.
+The kiosk (and now the phone's review screen too) supports configurable AI generation buttons. Each button triggers a ComfyUI workflow that receives the raw uploaded photo (without the event frame) and returns a generated result for printing. Generated results are then processed by the kiosk like any other photo and can be framed and printed.
+
+**Shared, cache-backed transforms.** Every transform is computed by a server-side cache keyed on the **content hash of the original photo plus the button id** — not the photo filename — so it is shared between the phone preview and the kiosk. Each `(photo content, button)` pair is run through ComfyUI **at most once per event**, no matter how many times it is previewed, accepted, or re-selected. The cache lives in `storage/ai-cache/` (override with `AI_CACHE_DIR`). There is no TTL or size cap (it is event-scoped, a few MB per entry); delete the directory to clear it.
+
+| Transform event | ComfyUI compute |
+|---|---|
+| Preview button A | 1 |
+| Preview A again / tap after retake | 0 (cache hit) |
+| Accept with choice A → kiosk displays A | 0 (cache hit) |
+| Kiosk switches to B (never computed for this photo) | 1 (first time for that pair) |
+| Kiosk switches back to A | 0 (cache hit) |
+| Accept with no choice (Show Original) | 0 |
+| Second guest uploads the same photo and previews A | 0 (content-hash key) |
 
 ### Configuring AI Buttons
 
@@ -213,12 +225,16 @@ When a button is clicked, the kiosk:
 ### API
 
 ```
+POST /api/ai/transform
+Body: multipart/form-data — field `photo` (the original image, max 20MB) + field `buttonId`
+Response: { "imageUrl": "data:image/jpeg;base64,..." }  (unframed; cache hit or miss)
+
 POST /api/ai/generate
 Body: { "photoId": "abc123.jpg", "buttonId": "z-turbo" }
 Response: { "imageUrl": "data:image/png;base64,..." }
 ```
 
-The `buttonId` must match the `id` field of a configured button.
+The `buttonId` must match the `id` field of a configured button. Both `/api/ai/transform` (phone) and `/api/ai/generate` (kiosk) share the same cache-backed pipeline: `/api/ai/transform` returns an **unframed** image (the kiosk frames at print time to avoid double-framing), while `/api/ai/generate` returns the **framed** image. Validation failures return `400 { "error" }`; ComfyUI errors/timeouts return `500 { "error" }`.
 
 ### Running Tests
 
@@ -229,7 +245,7 @@ The `buttonId` must match the `id` field of a configured button.
 | `GET` | `/api/event` | Event config: `{ name, year }` |
 | `GET` | `/api/config` | Full app config (event, frame, print settings) |
 | `PUT` | `/api/config` | Save updated config |
-| `POST` | `/api/photos` | Upload a photo (multipart/form-data, max 20MB, images only). Returns photo metadata. |
+| `POST` | `/api/photos` | Upload a photo (multipart/form-data, max 20MB, images only). Optional `aiButton` field carries the phone's chosen transformation. Returns photo metadata including `aiButton: string | null`. |
 | `GET` | `/api/photos` | List all photos (newest first): `[{ id, url, thumbnailUrl, timestamp }]` |
 | `GET` | `/api/photos/:id` | Serve the raw uploaded image |
 | `GET` | `/api/frame/:id` | Serve a photo with the event frame overlaid |

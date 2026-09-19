@@ -7,10 +7,12 @@ export default defineConfig({
   expect: {
     timeout: 10_000,
   },
-  fullyParallel: true,
+  // The E2E specs share one file-backed settings store. Run them serially so
+  // tests that update /api/config cannot overwrite another test's fixture.
+  fullyParallel: false,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
-  workers: process.env.CI ? 1 : undefined,
+  workers: 1,
   use: {
     baseURL: "http://127.0.0.1:3001",
     trace: "on-first-retry",
