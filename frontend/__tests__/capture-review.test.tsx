@@ -58,9 +58,26 @@ describe('CapturePage - review flow', () => {
     fireEvent.change(getFileInput(), { target: { files: [file] } });
   }
 
+  // Only /api/photos calls — the page also fetches /api/config on mount
+  // (AI button row), which these tests do not care about.
+  function uploadCalls(): Array<[string, RequestInit]> {
+    return mockFetch.mock.calls.filter(([url]) => url === '/api/photos');
+  }
+
   beforeEach(() => {
     let counter = 0;
     vi.stubGlobal('fetch', mockFetch);
+    // Default router: serve /api/config (no buttons) on mount; individual
+    // tests override with their own implementations.
+    mockFetch.mockImplementation((url: string) => {
+      if (url === '/api/config') {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ ai: { buttons: [] } }),
+        });
+      }
+      return Promise.resolve(okResponse());
+    });
     // jsdom does not implement object URLs
     URL.createObjectURL = vi.fn(
       (file: File) => `blob:mock-${++counter}-${file.name}`
@@ -73,7 +90,7 @@ describe('CapturePage - review flow', () => {
     vi.restoreAllMocks();
   });
 
-  it('idle: shows the camera button and makes no network requests', () => {
+  it('idle: shows the camera button and does not upload', () => {
     render(<CapturePage />);
 
     expect(
@@ -83,12 +100,13 @@ describe('CapturePage - review flow', () => {
       screen.getByRole('button', { name: 'Take a photo' })
     ).toBeInTheDocument();
 
-    // No preview, no action bar, no fetch before a photo is taken
+    // No preview, no action bar, no photo upload before a photo is taken
+    // (the only mount-time request is the /api/config fetch)
     expect(
       screen.queryByRole('img', { name: 'Photo preview' })
     ).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /accept/i })).not.toBeInTheDocument();
-    expect(mockFetch).not.toHaveBeenCalled();
+    expect(uploadCalls()).toHaveLength(0);
   });
 
   it('selecting a photo shows a full-screen preview and does NOT upload', () => {
@@ -107,8 +125,8 @@ describe('CapturePage - review flow', () => {
     expect(screen.getByRole('button', { name: /retake/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /discard/i })).toBeInTheDocument();
 
-    // Nothing has been uploaded — no fetch at all
-    expect(mockFetch).not.toHaveBeenCalled();
+    // Nothing has been uploaded (only the mount-time /api/config fetch)
+    expect(uploadCalls()).toHaveLength(0);
   });
 
   it('accept uploads the original file (no aiButton when the original is showing) and shows success', async () => {
@@ -124,8 +142,8 @@ describe('CapturePage - review flow', () => {
       expect(screen.getByText(/photo sent to kiosk/i)).toBeInTheDocument()
     );
 
-    expect(mockFetch).toHaveBeenCalledTimes(1);
-    const [url, init] = mockFetch.mock.calls[0];
+    expect(uploadCalls()).toHaveLength(1);
+    const [url, init] = uploadCalls()[0];
     expect(url).toBe('/api/photos');
     expect(init.method).toBe('POST');
 
@@ -167,7 +185,7 @@ describe('CapturePage - review flow', () => {
       resolveUpload(okResponse());
       await Promise.resolve();
     });
-    expect(mockFetch).toHaveBeenCalledTimes(1);
+    expect(uploadCalls()).toHaveLength(1);
   });
 
   it('returns to idle ~3s after success', async () => {
@@ -220,8 +238,8 @@ describe('CapturePage - review flow', () => {
       screen.queryByRole('img', { name: 'Photo preview' })
     ).not.toBeInTheDocument();
     expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:mock-1-shot.jpg');
-    // Retake never touches the server
-    expect(mockFetch).not.toHaveBeenCalled();
+    // Retake never uploads
+    expect(uploadCalls()).toHaveLength(0);
     // Back to idle
     expect(
       screen.getByRole('button', { name: 'Take a photo' })
@@ -237,7 +255,7 @@ describe('CapturePage - review flow', () => {
     fireEvent.click(screen.getByRole('button', { name: /discard/i }));
 
     // Nothing uploaded, preview cleared + URL revoked, back to idle
-    expect(mockFetch).not.toHaveBeenCalled();
+    expect(uploadCalls()).toHaveLength(0);
     expect(
       screen.queryByRole('img', { name: 'Photo preview' })
     ).not.toBeInTheDocument();
@@ -248,9 +266,20 @@ describe('CapturePage - review flow', () => {
   });
 
   it('upload failure shows an error + Retry that re-uploads the same file', async () => {
-    mockFetch
-      .mockResolvedValueOnce(errorResponse(500, 'Server error'))
-      .mockResolvedValue(okResponse());
+    let uploads = 0;
+    mockFetch.mockImplementation((url: string) => {
+      if (url === '/api/config') {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ ai: { buttons: [] } }),
+        });
+      }
+      // First upload fails, the retry succeeds
+      uploads += 1;
+      return uploads === 1
+        ? Promise.resolve(errorResponse(500, 'Server error'))
+        : Promise.resolve(okResponse());
+    });
     render(<CapturePage />);
 
     selectFile(makeFile('retry-shot.jpg'));
@@ -259,20 +288,20 @@ describe('CapturePage - review flow', () => {
     await vi.waitFor(() =>
       expect(screen.getByText('Server error')).toBeInTheDocument()
     );
-    expect(mockFetch).toHaveBeenCalledTimes(1);
+    expect(uploadCalls()).toHaveLength(1);
 
     // Preview and the retained File survive the failure
     expect(screen.getByRole('img', { name: 'Photo preview' })).toBeInTheDocument();
-    const firstFd = mockFetch.mock.calls[0][1].body as FormData;
+    const firstFd = uploadCalls()[0][1].body as FormData;
 
     // Retry re-uploads the same retained file
     fireEvent.click(screen.getByRole('button', { name: /retry/i }));
     await vi.waitFor(() =>
       expect(screen.getByText(/photo sent to kiosk/i)).toBeInTheDocument()
     );
-    expect(mockFetch).toHaveBeenCalledTimes(2);
+    expect(uploadCalls()).toHaveLength(2);
 
-    const secondFd = mockFetch.mock.calls[1][1].body as FormData;
+    const secondFd = uploadCalls()[1][1].body as FormData;
     const firstPhoto = firstFd.get('photo') as File;
     const secondPhoto = secondFd.get('photo') as File;
     expect(secondPhoto.name).toBe(firstPhoto.name);
@@ -295,7 +324,7 @@ describe('CapturePage - review flow', () => {
 
     expect(screen.getByRole('button', { name: /retry/i })).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: /discard/i }));
-    expect(mockFetch).toHaveBeenCalledTimes(1);
+    expect(uploadCalls()).toHaveLength(1);
     expect(
       screen.getByRole('button', { name: 'Take a photo' })
     ).toBeInTheDocument();

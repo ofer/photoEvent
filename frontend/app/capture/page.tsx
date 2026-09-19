@@ -1,9 +1,14 @@
 "use client";
 
 import { useState, useRef, useCallback, useEffect } from "react";
-import { uploadPhoto } from "../../lib/api";
+import { uploadPhoto, transformPhoto } from "../../lib/api";
 
 type Phase = "idle" | "review" | "uploading" | "success" | "error";
+
+interface AiButton {
+  id: string;
+  label: string;
+}
 
 const SUCCESS_DELAY_MS = 3000;
 
@@ -15,9 +20,24 @@ export default function CapturePage() {
   // preview (set by the AI button row on the review screen). null = the
   // original capture is showing.
   const [appliedButtonId, setAppliedButtonId] = useState<string | null>(null);
+  // Data URL of the transformed preview (null = the original is showing).
+  const [transformedUrl, setTransformedUrl] = useState<string | null>(null);
+  // AI buttons from /api/config (same source as the kiosk). Empty = no row.
+  const [aiButtons, setAiButtons] = useState<AiButton[]>([]);
+  const [generating, setGenerating] = useState(false);
+  const [generatingButtonId, setGeneratingButtonId] = useState<string | null>(null);
+  const [transformError, setTransformError] = useState("");
   const [error, setError] = useState<string>("");
   const fileInputRef = useRef<HTMLInputElement>(null);
   const successTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Bumped on every new capture so an in-flight transform result from a
+  // previous capture (Retake/Discard) is discarded on completion.
+  const captureTokenRef = useRef(0);
+  const phaseRef = useRef<Phase>(phase);
+
+  useEffect(() => {
+    phaseRef.current = phase;
+  }, [phase]);
 
   // Revoke the object URL when it is replaced or on unmount.
   useEffect(() => {
@@ -34,10 +54,37 @@ export default function CapturePage() {
     []
   );
 
+  // Fetch the AI buttons (same source the kiosk uses). Failures are silent —
+  // the review screen simply shows no AI button row.
+  useEffect(() => {
+    fetch("/api/config")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((cfg) => {
+        const buttons = cfg?.ai?.buttons;
+        if (Array.isArray(buttons) && buttons.length > 0) {
+          setAiButtons(
+            buttons
+              .filter(
+                (b: unknown): b is AiButton =>
+                  !!b &&
+                  typeof (b as AiButton).id === "string" &&
+                  typeof (b as AiButton).label === "string"
+              )
+              .map((b: AiButton) => ({ id: b.id, label: b.label }))
+          );
+        }
+      })
+      .catch(() => {});
+  }, []);
+
   const clearCapture = useCallback(() => {
     setCapturedFile(null);
     setPreviewUrl(null); // revokes the object URL via the effect above
     setAppliedButtonId(null);
+    setTransformedUrl(null);
+    setGenerating(false);
+    setGeneratingButtonId(null);
+    setTransformError("");
     setError("");
   }, []);
 
@@ -48,9 +95,14 @@ export default function CapturePage() {
       // Reset the input so the same file can be re-selected later.
       e.target.value = "";
       if (!file) return;
+      // New capture: bump the token so an in-flight transform result from a
+      // previous capture is discarded, and start from the original preview.
+      captureTokenRef.current += 1;
       setCapturedFile(file);
       setPreviewUrl(URL.createObjectURL(file));
       setAppliedButtonId(null);
+      setTransformedUrl(null);
+      setTransformError("");
       setError("");
       setPhase("review");
     },
@@ -79,6 +131,43 @@ export default function CapturePage() {
       );
     }
   }, [capturedFile, appliedButtonId, phase, clearCapture]);
+
+  // Press an AI button: POST the ORIGINAL capture + buttonId to the cached
+  // transform pipeline. The original bytes are always sent, so the result is
+  // cached by content and the kiosk can re-apply it later from the cache.
+  const handleTransform = useCallback(
+    async (buttonId: string) => {
+      if (generating || phase !== "review" || !capturedFile) return;
+      const token = captureTokenRef.current;
+      setGenerating(true);
+      setGeneratingButtonId(buttonId);
+      setTransformError("");
+      try {
+        const data = await transformPhoto(capturedFile, buttonId);
+        // Discard stale results: the capture was replaced or the review
+        // screen was left while the transform was in flight.
+        if (token !== captureTokenRef.current || phaseRef.current !== "review") return;
+        setTransformedUrl(data.imageUrl);
+        setAppliedButtonId(buttonId);
+      } catch (e) {
+        if (token !== captureTokenRef.current) return;
+        setTransformError(
+          e instanceof Error ? e.message : "Transform failed. Please try again."
+        );
+      } finally {
+        setGenerating(false);
+        setGeneratingButtonId(null);
+      }
+    },
+    [generating, phase, capturedFile]
+  );
+
+  // Restore the original preview and drop the pending transformation choice.
+  const handleShowOriginal = useCallback(() => {
+    setTransformedUrl(null);
+    setAppliedButtonId(null);
+    setTransformError("");
+  }, []);
 
   // Retake: clear the capture and reopen the camera immediately.
   const handleRetake = useCallback(() => {
@@ -183,10 +272,16 @@ export default function CapturePage() {
         <div className="fixed inset-0 z-50 flex flex-col bg-black">
           <div className="relative flex-1 overflow-hidden">
             <img
-              src={previewUrl}
+              src={transformedUrl || previewUrl}
               alt="Photo preview"
               className="photo-enter h-full w-full object-cover"
             />
+
+            {phase === "review" && transformError && (
+              <div className="absolute inset-x-0 top-0 z-10 bg-black/80 px-4 py-2.5 text-center">
+                <p className="text-red-400 text-sm font-medium">{transformError}</p>
+              </div>
+            )}
 
             {phase === "uploading" && (
               <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-black/60">
@@ -219,6 +314,39 @@ export default function CapturePage() {
               </div>
             )}
           </div>
+
+          {/* AI transform row (review phase only) */}
+          {phase === "review" && aiButtons.length > 0 && (
+            <div className="flex flex-wrap items-center justify-center gap-2 bg-black px-4 pt-3">
+              {transformedUrl && (
+                <button
+                  type="button"
+                  onClick={handleShowOriginal}
+                  className="px-4 py-2 rounded-lg font-medium bg-white/10 hover:bg-white/20 text-white transition-colors"
+                >
+                  Show Original
+                </button>
+              )}
+              {aiButtons.map((btn) => {
+                const isGenerating = generating && generatingButtonId === btn.id;
+                return (
+                  <button
+                    key={btn.id}
+                    type="button"
+                    onClick={() => handleTransform(btn.id)}
+                    disabled={generating}
+                    className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+                      isGenerating
+                        ? "bg-purple-700 text-white ring-2 ring-purple-400"
+                        : "bg-purple-600 hover:bg-purple-700 active:bg-purple-800 text-white disabled:opacity-50"
+                    }`}
+                  >
+                    {isGenerating ? "Generating…" : btn.label}
+                  </button>
+                );
+              })}
+            </div>
+          )}
 
           {/* Action bar */}
           <div className="flex items-center gap-3 p-4 bg-black">

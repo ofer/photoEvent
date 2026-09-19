@@ -34,6 +34,31 @@ export async function uploadPhoto(file: File, aiButton?: string | null) {
   return res.json();
 }
 
+/**
+ * Request an AI transform preview for a photo that is not uploaded yet.
+ * Sends the ORIGINAL photo bytes (multipart field `photo`) plus the button id;
+ * the backend applies the button's workflow through the shared on-disk cache
+ * and returns an unframed data URL (the kiosk frames at print time).
+ */
+export async function transformPhoto(file: File, buttonId: string) {
+  const formData = new FormData();
+  formData.append("photo", file);
+  formData.append("buttonId", buttonId);
+
+  const res = await fetch(`/api/ai/transform`, {
+    method: "POST",
+    body: formData,
+  });
+
+  if (!res.ok) {
+    const body = await res.json().catch(() => null);
+    const message = body?.error || `Transform failed (${res.status})`;
+    throw new Error(message);
+  }
+
+  return res.json() as Promise<{ imageUrl: string }>;
+}
+
 export async function getEventConfig() {
   const res = await fetch(`/api/event`);
   if (!res.ok) throw new Error(`Failed to fetch event config (${res.status})`);
