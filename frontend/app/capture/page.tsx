@@ -2,6 +2,7 @@
 
 import { useState, useRef, useCallback, useEffect } from "react";
 import { uploadPhoto, transformPhoto } from "../../lib/api";
+import { TrashIcon } from "@heroicons/react/24/outline";
 
 type Phase = "idle" | "review" | "uploading" | "success" | "error";
 
@@ -369,8 +370,9 @@ export default function CapturePage() {
                 <button
                   type="button"
                   onClick={handleDiscard}
-                  className="px-5 py-3 rounded-xl bg-white/10 hover:bg-white/20 active:bg-white/30 text-white/80 hover:text-white font-medium transition-colors"
+                  className="flex items-center gap-2 px-5 py-3 rounded-xl bg-white/10 hover:bg-white/20 active:bg-white/30 text-white/80 hover:text-white font-medium transition-colors"
                 >
+                  <TrashIcon className="h-5 w-5 shrink-0" aria-hidden="true" />
                   Discard
                 </button>
               </>
@@ -395,8 +397,9 @@ export default function CapturePage() {
                 <button
                   type="button"
                   disabled
-                  className="px-5 py-3 rounded-xl bg-white/10 text-white/50 font-medium disabled:cursor-not-allowed"
+                  className="flex items-center gap-2 px-5 py-3 rounded-xl bg-white/10 text-white/50 font-medium disabled:cursor-not-allowed"
                 >
+                  <TrashIcon className="h-5 w-5 shrink-0" aria-hidden="true" />
                   Discard
                 </button>
               </>
@@ -407,8 +410,9 @@ export default function CapturePage() {
                 <button
                   type="button"
                   onClick={handleDiscard}
-                  className="px-5 py-3 rounded-xl bg-white/10 hover:bg-white/20 active:bg-white/30 text-white/80 hover:text-white font-medium transition-colors"
+                  className="flex items-center gap-2 px-5 py-3 rounded-xl bg-white/10 hover:bg-white/20 active:bg-white/30 text-white/80 hover:text-white font-medium transition-colors"
                 >
+                  <TrashIcon className="h-5 w-5 shrink-0" aria-hidden="true" />
                   Discard
                 </button>
                 <button
