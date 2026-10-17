@@ -1,0 +1,62 @@
+services:
+  frontend:
+    build:
+      context: ..
+      dockerfile: deployment/Dockerfile
+    ports:
+      - "3300:3000"
+    environment:
+      - BACKEND_URL=http://backend:4000
+      - HOSTNAME=0.0.0.0
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://frontend:3000"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    networks:
+      - traefik_net
+      - internal
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.photoevent.rule=Host(`photoevent.example.com`)"
+      - "traefik.http.routers.photoevent.tls.certresolver=myresolver"
+      - 'traefik.http.routers.photoevent.entrypoints=websecure'
+      - "traefik.http.routers.photoevent.tls=true"
+      - "traefik.http.services.photoevent.loadbalancer.server.port=3000"
+      - traefik.docker.network=traefik_net
+  backend:
+    build:
+      context: ..
+      dockerfile: deployment/Dockerfile.backend
+    ports:
+      - "4400:4000"
+    networks:
+      - internal
+    volumes:
+      - /media/storage/photoEvent:/app/storage
+    environment:
+      - PORT=4000
+      - EVENT_NAME=${EVENT_NAME:-PhotoEvent}
+      - EVENT_YEAR=${EVENT_YEAR:-2026}
+      - CAPTURE_URL=${CAPTURE_URL:-http://localhost:3300/capture}
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:4000/api/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+volumes:
+  photo-storage:
+
+networks:
+  internal:
+  traefik_net:
+    name: traefik_net
+    external: true
