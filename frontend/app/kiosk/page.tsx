@@ -33,21 +33,22 @@ interface Config {
 
 const COUNTDOWN_SECONDS = 30;
 
-// Paper size metadata: CSS @page value + explicit px dimensions for print
-const PAPER_SIZES: Record<string, { css: string; pxW: number; pxH: number; orientation: string }> = {
-  A4:          { css: "A4",          pxW: 1239, pxH: 1754, orientation: "portrait" },
-  "10x15cm":   { css: "10cm 15cm",  pxW: 378,  pxH: 567,  orientation: "landscape" },
-  "5x7in":     { css: "5in 7in",    pxW: 480,  pxH: 672,  orientation: "portrait" },
-  "8x10in":    { css: "8in 10in",   pxW: 768,  pxH: 960,  orientation: "portrait" },
-  letter:      { css: "letter",     pxW: 1224, pxH: 1584, orientation: "portrait" },
+// pxW/pxH are the paper's physical CSS px (1px = 1/96in) in its natural (portrait) orientation; the print box swaps them for landscape.
+const PAPER_SIZES: Record<string, { css: string; pxW: number; pxH: number }> = {
+  A4:        { css: "A4",        pxW: 794, pxH: 1123 },
+  "10x15cm": { css: "10cm 15cm", pxW: 378, pxH: 567 },
+  "5x7in":   { css: "5in 7in",   pxW: 480, pxH: 672 },
+  "8x10in":  { css: "8in 10in",  pxW: 768, pxH: 960 },
+  letter:    { css: "letter",    pxW: 816, pxH: 1056 },
 };
 
-// Map user-facing paper size to Chrome standard paper size name + mm dimensions
+// Map user-facing paper size to Chrome printToPreview mediaSize (natural mm dims) + target name
 const CHROME_PAPER: Record<string, { name: string; wMm: number; hMm: number }> = {
-  A4:          { name: "A4",          wMm: 210, hMm: 297 },
-  "5x7in":     { name: "5x7_in",      wMm: 127, hMm: 178 },
-  "8x10in":    { name: "8x10_in",     wMm: 203, hMm: 254 },
-  letter:      { name: "LETTER",      wMm: 216, hMm: 279 },
+  A4:          { name: "A4",           wMm: 210, hMm: 297 },
+  "10x15cm":   { name: "10x15_cm",     wMm: 100, hMm: 150 },
+  "5x7in":     { name: "5x7_in",       wMm: 127, hMm: 178 },
+  "8x10in":    { name: "8x10_in",      wMm: 203, hMm: 254 },
+  letter:      { name: "LETTER",       wMm: 216, hMm: 279 },
 };
 
 export default function KioskPage() {
@@ -58,7 +59,7 @@ export default function KioskPage() {
   const [photoKey, setPhotoKey] = useState(0);
   const [printConfig, setPrintConfig] = useState<PrintConfig>({
     paperSize: "A4",
-    orientation: "landscape",
+    orientation: "auto",
     margin: "10mm",
   });
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -76,6 +77,7 @@ export default function KioskPage() {
   const [generatingButtonId, setGeneratingButtonId] = useState<string | null>(null);
   const [generatedImage, setGeneratedImage] = useState<string | null>(null);
   const [genError, setGenError] = useState("");
+  const [photoDims, setPhotoDims] = useState<{ w: number; h: number } | null>(null);
 
   const currentPhoto = photoQueue[0] || null;
   const queueLength = photoQueue.length;
@@ -148,6 +150,22 @@ export default function KioskPage() {
     };
   }, [startCountdownForNext]);
 
+  useEffect(() => {
+    setPhotoDims(null);
+  }, [photoKey]);
+
+  const paperMeta = PAPER_SIZES[printConfig.paperSize] || PAPER_SIZES["A4"];
+  const cssPaperSize = paperMeta.css;
+  const photoOrientation: "landscape" | "portrait" | null = photoDims
+    ? photoDims.w > photoDims.h ? "landscape" : "portrait"
+    : null;
+  const printOrientation: "landscape" | "portrait" =
+    printConfig.orientation === "landscape" || printConfig.orientation === "portrait"
+      ? printConfig.orientation
+      : photoOrientation ?? "portrait";
+  const boxW = printOrientation === "landscape" ? paperMeta.pxH : paperMeta.pxW;
+  const boxH = printOrientation === "landscape" ? paperMeta.pxW : paperMeta.pxH;
+
   // Auto-print when countdown hits 0
   useEffect(() => {
     if (countdown === 0 && photoQueue.length > 0 && printing) {
@@ -168,7 +186,7 @@ export default function KioskPage() {
               imageable_area_bottom_microns: Math.round(hMm * 3937.01),
             },
             targetName: chromeName,
-            landscape: printConfig.orientation === "landscape",
+            landscape: printOrientation === "landscape",
             marginsType: 0,
             shouldPrintBackgrounds: true,
             shouldPrintSelectionOnly: false,
@@ -188,7 +206,7 @@ export default function KioskPage() {
         });
       }, 300);
     }
-  }, [countdown, printing, printConfig.paperSize, printConfig.orientation, startCountdownForNext]);
+  }, [countdown, printing, printConfig.paperSize, printConfig.orientation, photoDims, startCountdownForNext]);
 
   const handleGenerate = async (buttonId: string) => {
     if (!currentPhoto || generating) return;
@@ -252,11 +270,6 @@ export default function KioskPage() {
       : "text-red-400";
 
   const progressPct = (countdown / COUNTDOWN_SECONDS) * 100;
-  const paperMeta = PAPER_SIZES[printConfig.paperSize] || PAPER_SIZES["A4"];
-  const cssPaperSize = paperMeta.css;
-  const printOrientation = printConfig.orientation || paperMeta.orientation;
-  const pxW = paperMeta.pxW;
-  const pxH = paperMeta.pxH;
 
   return (
     <main className="min-h-screen bg-black flex items-center justify-center relative select-none overflow-hidden">
@@ -275,6 +288,11 @@ export default function KioskPage() {
               src={generatedImage || `/api/frame/${currentPhoto.id}`}
               alt="Captured photo"
               className="max-w-[94vw] sm:max-w-[96vw] max-h-[84vh] sm:max-h-[86vh] object-contain photo-enter"
+              onLoad={(e) => {
+                const w = e.currentTarget.naturalWidth;
+                const h = e.currentTarget.naturalHeight;
+                if (w > 0 && h > 0) setPhotoDims({ w, h });
+              }}
             />
           </div>
 
@@ -401,16 +419,16 @@ export default function KioskPage() {
             position: fixed;
             left: 0;
             top: 0;
-            width: ${pxW}px;
-            height: ${pxH}px;
+            width: ${boxW}px;
+            height: ${boxH}px;
             display: flex;
             align-items: center;
             justify-content: center;
           }
           .kiosk-print-area > div:first-child {
             position: static;
-            width: ${pxW}px;
-            height: ${pxH}px;
+            width: ${boxW}px;
+            height: ${boxH}px;
             display: flex;
             align-items: center;
             justify-content: center;

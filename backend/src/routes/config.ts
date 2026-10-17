@@ -31,7 +31,7 @@ function getDefaultConfig() {
       subtextColor: "#cccccc",
       backgroundColor: "#ffffff",
     },
-    print: { paperSize: "A4", orientation: "landscape", margin: "10mm" },
+    print: { paperSize: "A4", orientation: "auto", margin: "10mm" },
     ai: { comfyServerUrl: "http://10.0.0.17:8188", buttons: [] as AiButtonConfig[] },
   };
 }
@@ -51,7 +51,7 @@ function getDefaultConfigWithoutEnv(): ReturnType<typeof getDefaultConfig> {
       subtextColor: "#cccccc",
       backgroundColor: "#ffffff",
     },
-    print: { paperSize: "A4", orientation: "landscape", margin: "10mm" },
+    print: { paperSize: "A4", orientation: "auto", margin: "10mm" },
     ai: { comfyServerUrl: "http://10.0.0.17:8188", buttons: [] as AiButtonConfig[] },
   };
 }

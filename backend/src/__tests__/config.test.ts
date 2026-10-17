@@ -95,7 +95,7 @@ describe("Config API", () => {
 
       // Print should use defaults
       expect(res.body.print.paperSize).toBe("A4");
-      expect(res.body.print.orientation).toBe("landscape");
+      expect(res.body.print.orientation).toBe("auto");
       expect(res.body.print.margin).toBe("10mm");
     });
 

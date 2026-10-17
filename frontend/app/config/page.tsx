@@ -42,7 +42,7 @@ const DEFAULT_CONFIG: Config = {
     subtextColor: "#cccccc",
     backgroundColor: "#ffffff",
   },
-  print: { paperSize: "A4", orientation: "landscape", margin: "10mm" },
+  print: { paperSize: "A4", orientation: "auto", margin: "10mm" },
   ai: { comfyServerUrl: "http://10.0.0.17:8188", buttons: [] },
 };
 
@@ -345,11 +345,23 @@ export default function ConfigPage() {
                 ))}
               </select>
             </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-500 mb-1">Orientation</label>
+              <select
+                value={config.print.orientation}
+                onChange={(e) => update("print", { ...config.print, orientation: e.target.value })}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
+              >
+                <option value="auto">Auto (match photo)</option>
+                <option value="portrait">Portrait</option>
+                <option value="landscape">Landscape</option>
+              </select>
+            </div>
             <div className="flex items-start gap-1.5 text-xs text-gray-400 mt-1">
               <svg className="w-3.5 h-3.5 mt-0.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
-              <span>Orientation adjusts automatically</span>
+              <span>Auto prints each photo in its own orientation</span>
             </div>
           </div>
         </section>
