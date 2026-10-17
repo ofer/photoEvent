@@ -2,6 +2,8 @@
 
 A web app for live photo capture and printing at events (bar mitzvah, wedding, etc.). Guests take photos on their phones and upload them instantly; a server kiosk prints each photo with a custom event-branded frame.
 
+The goal for this app for me was twofold, to set up a cool thing for an event I was hosting and to vibe code from start to end.  Most of what you see was done on Qwen 3.5 35B A3B or later on Qwen 3.6 35B A3B on Ollama and llamacpp locally with help from Opus when Qwen would get stuck, but that was maybe 2 or 3 times.
+
 **Tech stack**: Next.js 15 (frontend), Express/TypeScript (backend), Sharp (image processing), Docker
 
 ## Features
